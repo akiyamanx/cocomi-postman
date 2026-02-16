@@ -1,0 +1,18 @@
+# API キー・トークン（絶対にpushしない）
+config.json
+.env
+*.key
+*.token
+
+# OS生成ファイル
+.DS_Store
+Thumbs.db
+
+# エディタ
+*.swp
+*.swo
+*~
+
+# ログ（大量になる可能性があるため）
+logs/execution/*.log
+logs/history/*.log

@@ -1,0 +1,28 @@
+{
+  "_comment": "このファイルをconfig.jsonにコピーして、実際の値を入れてください",
+  "api_level": 1,
+  "projects": {
+    "genba-pro": {
+      "name": "現場Pro設備くん",
+      "repo": "akiyamanx/GenbaProSetsubikunN",
+      "local_path": "~/GenbaProSetsubikunN"
+    },
+    "culo-chan": {
+      "name": "CULOchanKAIKEIpro",
+      "repo": "akiyamanx/CULOchanKAIKEIpro",
+      "local_path": "~/CULOchanKAIKEIpro"
+    }
+  },
+  "check_interval_minutes": 5,
+  "max_retries": 3,
+  "apis": {
+    "github": {
+      "enabled": false,
+      "token": "ここにGitHubトークンを入れる"
+    },
+    "claude": {
+      "enabled": false,
+      "api_key": "ここにClaude APIキーを入れる"
+    }
+  }
+}
