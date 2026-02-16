@@ -1,0 +1,92 @@
+<!-- このファイルは: COCOMIファミリーの挨拶テストアプリ（CLAUDE.mdルール動作確認用） -->
+<!-- v1.0 新規作成 - COCOMIファミリー挨拶テストアプリ -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COCOMI Hello</title>
+  <style>
+    /* 全体のスタイル */
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #e8f4fd;
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+      color: #333;
+    }
+
+    /* メインタイトル */
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      color: #1a73e8;
+    }
+
+    /* 挨拶メッセージ表示エリア */
+    #message {
+      font-size: 1.4rem;
+      margin: 1.5rem 0;
+      padding: 1rem 2rem;
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      min-height: 2rem;
+      text-align: center;
+    }
+
+    /* こんにちはボタン */
+    #greeting-btn {
+      font-size: 1.2rem;
+      padding: 0.8rem 2.5rem;
+      background-color: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    #greeting-btn:hover {
+      background-color: #1558b0;
+    }
+  </style>
+</head>
+<body>
+  <h1>COCOMIファミリーへようこそ！</h1>
+  <div id="message">ボタンを押してね！</div>
+  <button id="greeting-btn">こんにちは</button>
+
+  <script>
+    // 挨拶メッセージの一覧
+    var greetings = [
+      "アキヤです！社長兼クリエイティブディレクター！",
+      "クロちゃんです！参謀＆設計リーダー！",
+      "Claude Codeです！開発チームです！",
+      "COCOMIファミリー、今日も頑張ろう！",
+      "無いものは作る。しかも世界初のやつを！"
+    ];
+
+    // 前回表示したインデックスを記憶（同じメッセージの連続を避ける）
+    var lastIndex = -1;
+
+    // ボタンクリック時の処理
+    document.getElementById("greeting-btn").addEventListener("click", function () {
+      var index;
+      // 前回と異なるメッセージを選ぶ
+      do {
+        index = Math.floor(Math.random() * greetings.length);
+      } while (index === lastIndex && greetings.length > 1);
+      lastIndex = index;
+
+      // メッセージを表示
+      document.getElementById("message").textContent = greetings[index];
+    });
+  </script>
+</body>
+</html>
