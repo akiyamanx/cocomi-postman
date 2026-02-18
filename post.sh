@@ -87,7 +87,7 @@ send_mission() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "  クロちゃんの指示書を貼り付けて、"
-    echo "  最後に空行のあと ${GREEN}ok${NC} と入力してね"
+    echo -e "  最後に空行のあと ${GREEN}ok${NC} と入力してね"
     echo ""
     echo -e "${YELLOW}--- ここから貼り付け ---${NC}"
 
