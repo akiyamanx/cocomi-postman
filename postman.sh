@@ -1,8 +1,7 @@
 #!/bin/bash
 # このファイルは: COCOMI Postman タブレット支店（本店）
 # タブレットのTermuxで動く実行管理メインスクリプト
-# Claude Codeへの指示書配達＆実行＆レポート管理
-# v1.0 作成 2026-02-18
+# v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -237,15 +236,13 @@ execute_mission() {
     echo -e "  ${YELLOW}📡 プロジェクトを最新に更新中...${NC}"
     git pull origin main >> "$LOG_FILE" 2>&1
 
-    # Claude Codeで指示書を実行
+    # v1.1変更: Claude Codeにはgitをさせない（/tmp権限問題回避）
     echo -e "  ${YELLOW}🤖 Claude Codeに指示書を渡します...${NC}"
     echo ""
     echo -e "${MAGENTA}━━━ Claude Code 実行中 ━━━${NC}"
     echo ""
 
-    # Claude Codeにパイプで指示書を渡す
-    # v1.0: 対話モードで実行（-p はコンテキストが短いため）
-    cat "$TARGET_MISSION" | claude -p --allowedTools "Bash(git *),Read,Write,Edit" 2>&1 | tee -a "$LOG_FILE"
+    cat "$TARGET_MISSION" | claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" 2>&1 | tee -a "$LOG_FILE"
 
     local EXIT_CODE=$?
 
@@ -253,26 +250,40 @@ execute_mission() {
     echo -e "${MAGENTA}━━━ Claude Code 完了 ━━━${NC}"
     echo ""
 
-    # 実行結果に応じてレポート生成
-    local TIMESTAMP=$(date +%Y%m%d-%H%M)
+    # v1.1: Postmanがgit push（Claude Codeの外で実行）
     local REPORT_NAME="R-${MISSION_NAME#M-}"
 
     if [ $EXIT_CODE -eq 0 ]; then
-        # 成功レポート
+        echo -e "${GREEN}  🤖 Claude Code作業完了！${NC}"
+
+        # プロジェクトリポジトリをgit push
+        echo -e "  ${YELLOW}📮 Postmanがgit pushします...${NC}"
+        cd "$CURRENT_REPO_PATH"
+        git add -A
+        if ! git diff --cached --quiet 2>/dev/null; then
+            git commit -m "📮 $MISSION_NAME by COCOMI Postman" > /dev/null 2>&1
+            git push origin main > /dev/null 2>&1 && \
+                echo -e "${GREEN}  📮 プロジェクトgit push完了${NC}" || \
+                echo -e "${RED}  ⚠️ git pushに失敗${NC}"
+        fi
+
         cat > "$REPORT_DIR/${REPORT_NAME}.md" << EOF
 # ✅ ミッション完了レポート
 - **ミッション:** ${MISSION_NAME}
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **完了日時:** $(date '+%Y-%m-%d %H:%M')
 - **結果:** 成功
-
-## 実行ログ
-$(tail -30 "$LOG_FILE")
 EOF
-
-        echo -e "${GREEN}  ✅ ミッション完了！レポート作成済み${NC}"
+        echo -e "${GREEN}  ✅ ミッション完了！${NC}"
     else
-        # エラーレポート
+        # エラーでも途中成果をpush
+        cd "$CURRENT_REPO_PATH"
+        git add -A
+        if ! git diff --cached --quiet 2>/dev/null; then
+            git commit -m "⚠️ $MISSION_NAME 途中成果" > /dev/null 2>&1
+            git push origin main > /dev/null 2>&1
+        fi
+
         mkdir -p "$POSTMAN_DIR/errors/$CURRENT_PROJECT"
         cat > "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${MISSION_NAME#M-}.md" << EOF
 # ❌ エラーレポート
@@ -280,15 +291,11 @@ EOF
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **発生日時:** $(date '+%Y-%m-%d %H:%M')
 - **終了コード:** ${EXIT_CODE}
-
-## エラーログ（末尾30行）
-$(tail -30 "$LOG_FILE")
 EOF
-
-        echo -e "${RED}  ❌ エラーが発生しました。エラーレポートを作成しました${NC}"
+        echo -e "${RED}  ❌ エラー発生。レポート作成済み${NC}"
     fi
 
-    # cocomi-postmanリポジトリに戻ってレポートをpush
+    # レポートをgit push（Postmanリポジトリ）
     cd "$POSTMAN_DIR"
     echo "完了: $(date)" >> "$LOG_FILE"
     git add -A
@@ -451,8 +458,7 @@ switch_project() {
     sleep 1
 }
 
-# === 実行エンジン読み込み（core/executor.sh） ===
-# v1.0追加 - 自動モード＆ミッション実行を分離
+# === 実行エンジン読み込み ===
 source "$POSTMAN_DIR/core/executor.sh"
 
 # === プレースホルダー ===

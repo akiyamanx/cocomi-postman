@@ -1,10 +1,49 @@
 #!/bin/bash
 # このファイルは: COCOMI Postman 自動モード＆ミッション実行エンジン
 # postman.shから呼ばれる実行系機能
-# v1.0 作成 2026-02-18
+# v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
+# /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
-# === 自動モード用の単一ミッション実行 ===
-# 引数: $1=ミッションファイルパス $2=ミッション名
+# === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
+git_push_project() {
+    local REPO_PATH=$1
+    local COMMIT_MSG=$2
+
+    if [ -n "$REPO_PATH" ] && [ -d "$REPO_PATH" ]; then
+        cd "$REPO_PATH"
+        git add -A
+        if ! git diff --cached --quiet 2>/dev/null; then
+            git commit -m "$COMMIT_MSG" > /dev/null 2>&1
+            if git push origin main > /dev/null 2>&1; then
+                echo -e "  ${GREEN}📮 プロジェクトをgit push完了${NC}"
+                return 0
+            else
+                echo -e "  ${RED}⚠️ プロジェクトのgit pushに失敗${NC}"
+                return 1
+            fi
+        else
+            echo -e "  ${YELLOW}📝 プロジェクトに変更なし（push不要）${NC}"
+        fi
+    fi
+    return 0
+}
+
+# === Postmanリポジトリのgit push（レポート送信） ===
+git_push_postman() {
+    local COMMIT_MSG=$1
+    cd "$POSTMAN_DIR"
+    git add -A
+    if ! git diff --cached --quiet 2>/dev/null; then
+        git commit -m "$COMMIT_MSG" > /dev/null 2>&1
+        if git push origin main > /dev/null 2>&1; then
+            echo -e "  ${GREEN}📮 レポートをスマホ支店に送りました${NC}"
+        else
+            echo -e "  ${RED}⚠️ レポートのgit pushに失敗${NC}"
+        fi
+    fi
+}
+
+# === 単一ミッション実行 ===
 run_single_mission() {
     local MISSION_FILE=$1
     local MISSION_NAME=$2
@@ -13,59 +52,55 @@ run_single_mission() {
 
     mkdir -p "$REPORT_DIR" "$POSTMAN_DIR/logs/execution"
 
-    echo "=== 自動実行ログ ===" > "$LOG_FILE"
+    echo "=== ミッション実行ログ ===" > "$LOG_FILE"
     echo "開始: $(date)" >> "$LOG_FILE"
+    echo "プロジェクト: $CURRENT_PROJECT_NAME" >> "$LOG_FILE"
 
     if [ -n "$CURRENT_REPO_PATH" ] && [ -d "$CURRENT_REPO_PATH" ]; then
+        # STEP 1: プロジェクトを最新に
         cd "$CURRENT_REPO_PATH"
+        echo -e "  ${YELLOW}📡 git pull中...${NC}"
         git pull origin main >> "$LOG_FILE" 2>&1
 
-        # Claude Codeにパイプで指示書を渡して実行
-        cat "$MISSION_FILE" | claude -p --allowedTools "Bash(git *),Read,Write,Edit" >> "$LOG_FILE" 2>&1
+        # STEP 2: Claude Codeで作業（gitはさせない！）
+        echo -e "  ${YELLOW}🤖 Claude Code実行中...${NC}"
+        cat "$MISSION_FILE" | claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" >> "$LOG_FILE" 2>&1
         local EXIT_CODE=$?
 
+        # STEP 3: Postmanがgit push（/tmp問題回避）
         local REPORT_NAME="R-${MISSION_NAME#M-}"
         if [ $EXIT_CODE -eq 0 ]; then
-            # 成功レポート生成
+            echo -e "  ${GREEN}🤖 Claude Code作業完了！${NC}"
+            git_push_project "$CURRENT_REPO_PATH" "📮 $MISSION_NAME by COCOMI Postman"
+
             cat > "$REPORT_DIR/${REPORT_NAME}.md" << EOF
-# ✅ 自動実行完了レポート
+# ✅ ミッション完了レポート
 - **ミッション:** ${MISSION_NAME}
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **完了日時:** $(date '+%Y-%m-%d %H:%M')
-- **実行モード:** 🌙 自動モード
-
-## 実行ログ（末尾30行）
-\`\`\`
-$(tail -30 "$LOG_FILE")
-\`\`\`
+- **結果:** 成功
 EOF
-            echo -e "  ${GREEN}✅ $(date '+%H:%M') $MISSION_NAME 完了！${NC}"
+            echo -e "  ${GREEN}✅ $MISSION_NAME 完了！${NC}"
         else
-            # エラーレポート生成
+            echo -e "  ${RED}🤖 エラー発生${NC}"
+            git_push_project "$CURRENT_REPO_PATH" "⚠️ $MISSION_NAME 途中成果"
+
             mkdir -p "$POSTMAN_DIR/errors/$CURRENT_PROJECT"
             cat > "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${MISSION_NAME#M-}.md" << EOF
-# ❌ 自動実行エラーレポート
+# ❌ エラーレポート
 - **ミッション:** ${MISSION_NAME}
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **発生日時:** $(date '+%Y-%m-%d %H:%M')
 - **終了コード:** ${EXIT_CODE}
-
-## エラーログ（末尾30行）
-\`\`\`
-$(tail -30 "$LOG_FILE")
-\`\`\`
 EOF
-            echo -e "  ${RED}❌ $(date '+%H:%M') $MISSION_NAME エラー（コード:${EXIT_CODE}）${NC}"
+            echo -e "  ${RED}❌ $MISSION_NAME エラー${NC}"
         fi
 
-        # レポートをGitHubにpush
-        cd "$POSTMAN_DIR"
+        # STEP 4: レポートをpush
         echo "完了: $(date)" >> "$LOG_FILE"
-        git add -A
-        git commit -m "📋 自動実行レポート: $CURRENT_PROJECT/$REPORT_NAME" > /dev/null 2>&1
-        git push origin main > /dev/null 2>&1
+        git_push_postman "📋 レポート: $CURRENT_PROJECT/$REPORT_NAME"
     else
-        echo -e "  ${RED}❌ リポジトリパスが無効: $CURRENT_REPO_PATH${NC}"
+        echo -e "  ${RED}❌ リポジトリが見つからない: $CURRENT_REPO_PATH${NC}"
     fi
 }
 
@@ -76,12 +111,13 @@ auto_mode() {
     echo -e "${BOLD}  🌙 自動モード（放置運転）${NC}"
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo "  GitHubを定期チェックして新着ミッションを自動実行します"
+    echo "  GitHubを定期チェック→新着ミッション自動実行"
+    echo "  ※ git pushはPostmanが直接行います"
     echo ""
     echo "  チェック間隔："
-    echo -e "  ${GREEN}1${NC}. 毎1分（すぐ反応）"
-    echo -e "  ${GREEN}2${NC}. 毎5分（バランス型）⭐"
-    echo -e "  ${GREEN}3${NC}. 毎15分（省エネ）"
+    echo -e "  ${GREEN}1${NC}. 毎1分"
+    echo -e "  ${GREEN}2${NC}. 毎5分 ⭐"
+    echo -e "  ${GREEN}3${NC}. 毎15分"
     echo ""
     echo -n "  → "
     read -r INTERVAL_CHOICE
@@ -94,19 +130,15 @@ auto_mode() {
     esac
 
     echo ""
-    echo -e "${GREEN}  🌙 自動モード起動！${NC}"
-    echo -e "  チェック間隔: $((INTERVAL / 60))分"
+    echo -e "${GREEN}  🌙 自動モード起動！（${INTERVAL}秒間隔）${NC}"
     echo -e "  Ctrl+C で終了"
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
 
-    # 自動モードループ
     while true; do
         local NOW=$(date '+%H:%M')
         cd "$POSTMAN_DIR"
         git pull origin main > /dev/null 2>&1
 
-        # 全プロジェクトの未実行ミッションをチェック
         local found=false
         for proj in genba-pro culo-chan maintenance-map; do
             local mdir="$POSTMAN_DIR/missions/$proj"
@@ -120,10 +152,9 @@ auto_mode() {
                     local ename="E-${mname#M-}"
 
                     if [ ! -f "$rdir/${rname}.md" ] && [ ! -f "$edir/${ename}.md" ]; then
-                        echo -e "  ${GREEN}📬 $NOW 新着発見！ [$proj] $mname${NC}"
+                        echo -e "  ${GREEN}📬 $NOW 新着！[$proj] $mname${NC}"
                         CURRENT_PROJECT="$proj"
                         load_project_info
-                        echo -e "  ${YELLOW}🏭 自動実行中...${NC}"
                         run_single_mission "$mf" "$mname"
                         found=true
                     fi
@@ -132,7 +163,7 @@ auto_mode() {
         done
 
         if ! $found; then
-            echo -e "  🟢 $NOW チェック... 新着なし"
+            echo -e "  🟢 $NOW チェック完了 新着なし"
         fi
 
         sleep $INTERVAL
