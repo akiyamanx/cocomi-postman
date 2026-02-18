@@ -3,6 +3,7 @@
 # アキヤがスマホのTermuxで使うメインスクリプト
 # クロちゃんの部屋と画面分割して使う
 # v1.0 作成 2026-02-18
+# v1.2 修正 2026-02-19 - config.json動的参照に変更
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -42,14 +43,23 @@ init() {
     fi
 }
 
-# === プロジェクト名を読み込む ===
+# === config.jsonからプロジェクト名を読み込む ===
+# v1.2修正 - ハードコードからconfig.json参照に変更
 load_project_name() {
-    case "$CURRENT_PROJECT" in
-        "genba-pro") CURRENT_PROJECT_NAME="現場Pro設備くん" ;;
-        "culo-chan") CURRENT_PROJECT_NAME="CULOchanKAIKEIpro" ;;
-        "maintenance-map") CURRENT_PROJECT_NAME="メンテナンスマップ" ;;
-        *) CURRENT_PROJECT_NAME="$CURRENT_PROJECT" ;;
-    esac
+    if [ ! -f "$CONFIG_FILE" ]; then
+        CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
+        return
+    fi
+    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    if [ -z "$CURRENT_PROJECT_NAME" ]; then
+        CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
+    fi
+}
+
+# === config.jsonからプロジェクトID一覧を取得 ===
+# v1.2追加 - 動的プロジェクト一覧
+get_project_ids() {
+    grep -B1 '"name"' "$CONFIG_FILE" | grep '": {' | sed 's/.*"\([^"]*\)".*/\1/'
 }
 
 # === メインメニュー表示 ===
@@ -211,6 +221,7 @@ check_reports() {
 }
 
 # === 3. プロジェクト切替 ===
+# v1.2修正 - config.jsonから動的にプロジェクト一覧を表示
 switch_project() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -218,31 +229,29 @@ switch_project() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    # 現在選択中のプロジェクトに★をつける
-    local mark1="" mark2="" mark3=""
-    [ "$CURRENT_PROJECT" = "genba-pro" ] && mark1=" ⭐"
-    [ "$CURRENT_PROJECT" = "culo-chan" ] && mark2=" ⭐"
-    [ "$CURRENT_PROJECT" = "maintenance-map" ] && mark3=" ⭐"
+    # config.jsonからプロジェクト一覧を取得
+    local proj_ids=()
+    local i=1
+    while IFS= read -r pid; do
+        proj_ids+=("$pid")
+        local pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        local mcount=$(ls "$POSTMAN_DIR/missions/$pid"/M-*.md 2>/dev/null | wc -l)
+        local mark=""
+        [ "$CURRENT_PROJECT" = "$pid" ] && mark=" ⭐"
+        echo -e "  ${GREEN}${i}${NC}. ${pname} [ミッション${mcount}件]${mark}"
+        i=$((i + 1))
+    done < <(get_project_ids)
 
-    # ミッション数カウント
-    local m1=$(ls "$POSTMAN_DIR/missions/genba-pro"/M-*.md 2>/dev/null | wc -l)
-    local m2=$(ls "$POSTMAN_DIR/missions/culo-chan"/M-*.md 2>/dev/null | wc -l)
-    local m3=$(ls "$POSTMAN_DIR/missions/maintenance-map"/M-*.md 2>/dev/null | wc -l)
-
-    echo -e "  ${GREEN}1${NC}. 現場Pro設備くん    [ミッション${m1}件]${mark1}"
-    echo -e "  ${GREEN}2${NC}. CULOchanKAIKEIpro [ミッション${m2}件]${mark2}"
-    echo -e "  ${GREEN}3${NC}. メンテナンスマップ  [ミッション${m3}件]${mark3}"
     echo ""
     echo -n "  番号を選んでね → "
     read -r CHOICE
 
-    case "$CHOICE" in
-        1) CURRENT_PROJECT="genba-pro" ;;
-        2) CURRENT_PROJECT="culo-chan" ;;
-        3) CURRENT_PROJECT="maintenance-map" ;;
-        *) echo -e "${RED}  無効な番号だよ${NC}"; sleep 1; return ;;
-    esac
+    # 番号バリデーション
+    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt ${#proj_ids[@]} ]; then
+        echo -e "${RED}  無効な番号だよ${NC}"; sleep 1; return
+    fi
 
+    CURRENT_PROJECT="${proj_ids[$((CHOICE - 1))]}"
     load_project_name
     echo -e "  ${GREEN}✅ ${CURRENT_PROJECT_NAME} に切り替えたよ！${NC}"
     sleep 1
@@ -262,14 +271,9 @@ show_dashboard() {
 
     echo -e "  ${BOLD}🗂️ プロジェクト状況${NC}"
 
-    # 各プロジェクトのミッション・レポート数
-    for proj in genba-pro culo-chan maintenance-map; do
-        local pname=""
-        case "$proj" in
-            "genba-pro") pname="設備くん  " ;;
-            "culo-chan") pname="CULOchan  " ;;
-            "maintenance-map") pname="マップ    " ;;
-        esac
+    # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
+    while IFS= read -r proj; do
+        local pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
         local missions=$(ls "$POSTMAN_DIR/missions/$proj"/M-*.md 2>/dev/null | wc -l)
         local reports=$(ls "$POSTMAN_DIR/reports/$proj"/R-*.md 2>/dev/null | wc -l)
@@ -283,7 +287,7 @@ show_dashboard() {
         [ $missions -eq 0 ] && status_icon="📭"
 
         echo -e "    ${status_icon} ${pname}: 📝${missions}件 ✅${reports}件 ❌${errors}件 待機${pending}件"
-    done
+    done < <(get_project_ids)
 
     echo ""
     echo -e "  ${BOLD}💡 たまってるアイデア${NC}"

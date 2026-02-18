@@ -2,6 +2,7 @@
 # このファイルは: COCOMI Postman 自動モード＆ミッション実行エンジン
 # postman.shから呼ばれる実行系機能
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
+# v1.2 修正 2026-02-19 - auto_modeのプロジェクトループをconfig.json動的化
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -140,7 +141,8 @@ auto_mode() {
         git pull origin main > /dev/null 2>&1
 
         local found=false
-        for proj in genba-pro culo-chan maintenance-map; do
+        # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
+        while IFS= read -r proj; do
             local mdir="$POSTMAN_DIR/missions/$proj"
             local rdir="$POSTMAN_DIR/reports/$proj"
             local edir="$POSTMAN_DIR/errors/$proj"
@@ -160,7 +162,7 @@ auto_mode() {
                     fi
                 done
             fi
-        done
+        done < <(get_project_ids)
 
         if ! $found; then
             echo -e "  🟢 $NOW チェック完了 新着なし"

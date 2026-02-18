@@ -2,6 +2,7 @@
 # このファイルは: COCOMI Postman タブレット支店（本店）
 # タブレットのTermuxで動く実行管理メインスクリプト
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
+# v1.2 修正 2026-02-19 - config.json動的参照＋postman自身プロジェクト登録
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -36,26 +37,38 @@ init() {
     load_project_info
 }
 
-# === プロジェクト情報を読み込む ===
+# === config.jsonからプロジェクト情報を読み込む ===
+# v1.2修正 - ハードコードからconfig.json参照に変更
 load_project_info() {
-    case "$CURRENT_PROJECT" in
-        "genba-pro")
-            CURRENT_PROJECT_NAME="現場Pro設備くん"
-            CURRENT_REPO_PATH="$HOME/GenbaProSetsubikunN"
-            ;;
-        "culo-chan")
-            CURRENT_PROJECT_NAME="CULOchanKAIKEIpro"
-            CURRENT_REPO_PATH="$HOME/akiyamanx.github.io/CULOchanKAIKEIpro"
-            ;;
-        "maintenance-map")
-            CURRENT_PROJECT_NAME="メンテナンスマップ"
-            CURRENT_REPO_PATH="$HOME/akiyamanx.github.io/maintenance-map-ap"
-            ;;
-        *)
-            CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
-            CURRENT_REPO_PATH=""
-            ;;
-    esac
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}❌ config.jsonが見つかりません${NC}"
+        echo "config.jsonを作成してください"
+        CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
+        CURRENT_REPO_PATH=""
+        return
+    fi
+
+    # config.jsonからプロジェクト名を取得
+    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+
+    # config.jsonからローカルパスを取得（$HOMEを展開）
+    local raw_path=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"local_path"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    CURRENT_REPO_PATH=$(echo "$raw_path" | sed "s|\\\$HOME|$HOME|g")
+
+    # 取得できなかった場合のフォールバック
+    if [ -z "$CURRENT_PROJECT_NAME" ]; then
+        CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
+    fi
+    if [ -z "$CURRENT_REPO_PATH" ]; then
+        echo -e "${YELLOW}⚠️ プロジェクト '$CURRENT_PROJECT' のパスがconfig.jsonに見つかりません${NC}"
+    fi
+}
+
+# === config.jsonからプロジェクトID一覧を取得 ===
+# v1.2追加 - 動的プロジェクト一覧
+get_project_ids() {
+    # "name"の直前行にあるプロジェクトIDキーを抽出
+    grep -B1 '"name"' "$CONFIG_FILE" | grep '": {' | sed 's/.*"\([^"]*\)".*/\1/'
 }
 
 # === メインメニュー表示 ===
@@ -363,13 +376,9 @@ show_dashboard() {
     cd "$POSTMAN_DIR"
     git pull origin main > /dev/null 2>&1
 
-    for proj in genba-pro culo-chan maintenance-map; do
-        local pname=""
-        case "$proj" in
-            "genba-pro") pname="現場Pro設備くん  " ;;
-            "culo-chan") pname="CULOchanKAIKEIpro" ;;
-            "maintenance-map") pname="メンテナンスマップ " ;;
-        esac
+    # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
+    while IFS= read -r proj; do
+        local pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
         local missions=$(ls "$POSTMAN_DIR/missions/$proj"/M-*.md 2>/dev/null | wc -l)
         local reports=$(ls "$POSTMAN_DIR/reports/$proj"/R-*.md 2>/dev/null | wc -l)
@@ -379,7 +388,7 @@ show_dashboard() {
         echo -e "  ${BOLD}📂 ${pname}${NC}"
         echo "     📝ミッション:${missions} ✅完了:${reports} ❌エラー:${errors} 💡アイデア:${ideas}"
         echo ""
-    done
+    done < <(get_project_ids)
 
     echo "  Enter でメニューに戻る"
     read
@@ -427,6 +436,7 @@ direct_claude() {
 }
 
 # === 6. プロジェクト切替 ===
+# v1.2修正 - config.jsonから動的にプロジェクト一覧を表示
 switch_project() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -434,25 +444,30 @@ switch_project() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    local mark1="" mark2="" mark3=""
-    [ "$CURRENT_PROJECT" = "genba-pro" ] && mark1=" ⭐"
-    [ "$CURRENT_PROJECT" = "culo-chan" ] && mark2=" ⭐"
-    [ "$CURRENT_PROJECT" = "maintenance-map" ] && mark3=" ⭐"
+    # config.jsonからプロジェクト一覧を取得
+    local proj_ids=()
+    local proj_names=()
+    local i=1
+    while IFS= read -r pid; do
+        proj_ids+=("$pid")
+        local pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        proj_names+=("$pname")
+        local mark=""
+        [ "$CURRENT_PROJECT" = "$pid" ] && mark=" ⭐"
+        echo -e "  ${GREEN}${i}${NC}. ${pname}${mark}"
+        i=$((i + 1))
+    done < <(get_project_ids)
 
-    echo -e "  ${GREEN}1${NC}. 現場Pro設備くん${mark1}"
-    echo -e "  ${GREEN}2${NC}. CULOchanKAIKEIpro${mark2}"
-    echo -e "  ${GREEN}3${NC}. メンテナンスマップ${mark3}"
     echo ""
     echo -n "  → "
     read -r CHOICE
 
-    case "$CHOICE" in
-        1) CURRENT_PROJECT="genba-pro" ;;
-        2) CURRENT_PROJECT="culo-chan" ;;
-        3) CURRENT_PROJECT="maintenance-map" ;;
-        *) echo -e "${RED}  無効${NC}"; sleep 1; return ;;
-    esac
+    # 番号バリデーション
+    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt ${#proj_ids[@]} ]; then
+        echo -e "${RED}  無効${NC}"; sleep 1; return
+    fi
 
+    CURRENT_PROJECT="${proj_ids[$((CHOICE - 1))]}"
     load_project_info
     echo -e "  ${GREEN}✅ ${CURRENT_PROJECT_NAME} に切り替えたよ！${NC}"
     sleep 1
