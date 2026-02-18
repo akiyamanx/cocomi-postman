@@ -1,0 +1,17 @@
+{
+  "id": "genba-pro",
+  "name": "現場Pro設備くん",
+  "description": "建設現場管理アプリ（工程・写真・日報）",
+  "repo": "GenbaProSetsubikunN",
+  "repo_url": "https://github.com/akiyamanx/GenbaProSetsubikunN",
+  "local_path": "~/GenbaProSetsubikunN",
+  "status": "active",
+  "current_phase": "Phase8",
+  "tech_stack": "HTML, CSS, Vanilla JS, PWA, PDF.js",
+  "created": "2025-07",
+  "last_mission": "",
+  "total_missions": 0,
+  "total_completed": 0,
+  "total_errors": 0,
+  "notes": "図面ビューア、ピン配置、フリーハンド描画、画像エクスポート実装中"
+}

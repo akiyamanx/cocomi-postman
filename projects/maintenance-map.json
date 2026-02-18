@@ -1,0 +1,18 @@
+{
+  "id": "maintenance-map",
+  "name": "メンテナンスマップ",
+  "description": "ウォーターサーバーメンテナンス先の地図管理アプリ",
+  "repo": "akiyamanx.github.io",
+  "subfolder": "maintenance-map-ap",
+  "repo_url": "https://github.com/akiyamanx/akiyamanx.github.io",
+  "local_path": "~/akiyamanx.github.io/maintenance-map-ap",
+  "status": "active",
+  "current_version": "v2.0",
+  "tech_stack": "HTML, CSS, Vanilla JS, PWA, Google Maps API",
+  "created": "2026-01",
+  "last_mission": "",
+  "total_missions": 0,
+  "total_completed": 0,
+  "total_errors": 0,
+  "notes": "v2.0復旧完了。Phase B（高速/下道区間設定+距離計算）、Phase C（精算書連携）が次の課題"
+}

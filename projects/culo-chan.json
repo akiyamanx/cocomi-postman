@@ -1,0 +1,18 @@
+{
+  "id": "culo-chan",
+  "name": "CULOchanKAIKEIpro",
+  "description": "会計・見積書・請求書作成アプリ",
+  "repo": "akiyamanx.github.io",
+  "subfolder": "CULOchanKAIKEIpro",
+  "repo_url": "https://github.com/akiyamanx/akiyamanx.github.io",
+  "local_path": "~/akiyamanx.github.io/CULOchanKAIKEIpro",
+  "status": "active",
+  "current_version": "v0.96",
+  "tech_stack": "HTML, CSS, Vanilla JS, PWA, IndexedDB, jsPDF",
+  "created": "2026-02",
+  "last_mission": "",
+  "total_missions": 0,
+  "total_completed": 0,
+  "total_errors": 0,
+  "notes": "IndexedDB移行Phase1完了。材料名ドロップダウンバグ修正、Excel出力強化が次の課題"
+}
