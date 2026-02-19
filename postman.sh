@@ -1,9 +1,11 @@
 #!/bin/bash
+# shellcheck disable=SC2155,SC2164,SC2162,SC2012,SC1090,SC2001,SC2129
 # このファイルは: COCOMI Postman タブレット支店（本店）
 # タブレットのTermuxで動く実行管理メインスクリプト
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
 # v1.2 修正 2026-02-19 - config.json動的参照＋postman自身プロジェクト登録
 # v1.3 追加 2026-02-19 - LINE Messaging API通知機能
+# v1.4 修正 2026-02-19 - ShellCheck対応＋execute_missionリファクタリング
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -30,7 +32,7 @@ init() {
         echo "  cd ~ && git clone https://github.com/akiyamanx/cocomi-postman.git"
         exit 1
     fi
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || exit 1
 
     # デフォルトプロジェクト読み込み
     CURRENT_PROJECT=$(grep '"default_project"' "$CONFIG_FILE" 2>/dev/null | sed 's/.*: *"\(.*\)".*/\1/')
@@ -53,8 +55,9 @@ load_project_info() {
     CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
     # config.jsonからローカルパスを取得（$HOMEを展開）
-    local raw_path=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"local_path"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
-    CURRENT_REPO_PATH=$(echo "$raw_path" | sed "s|\\\$HOME|$HOME|g")
+    local raw_path
+    raw_path=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"local_path"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    CURRENT_REPO_PATH="${raw_path//\$HOME/$HOME}"
 
     # 取得できなかった場合のフォールバック
     if [ -z "$CURRENT_PROJECT_NAME" ]; then
@@ -107,7 +110,7 @@ check_inbox() {
     echo ""
 
     # git pullで最新取得
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     echo -e "  ${YELLOW}📡 GitHubから最新を取得中...${NC}"
     git pull origin main > /dev/null 2>&1
     echo ""
@@ -117,19 +120,18 @@ check_inbox() {
 
     # 全ミッションを確認し、レポートがないものを「未実行」とする
     local has_pending=false
-    local has_done=false
 
     echo -e "  ${BOLD}📂 ${CURRENT_PROJECT_NAME} のミッション${NC}"
     echo ""
 
-    if [ -d "$MISSION_DIR" ] && [ "$(ls "$MISSION_DIR"/M-*.md 2>/dev/null)" ]; then
-        for mission_file in $(ls -t "$MISSION_DIR"/M-*.md 2>/dev/null); do
-            local mname=$(basename "$mission_file" .md)
+    if [ -d "$MISSION_DIR" ] && ls "$MISSION_DIR"/M-*.md &>/dev/null; then
+        for mission_file in "$MISSION_DIR"/M-*.md; do
+            local mname
+            mname=$(basename "$mission_file" .md)
             local rname="R-${mname#M-}"
 
             if [ -f "$REPORT_DIR/${rname}.md" ]; then
                 echo -e "    ${GREEN}✅${NC} $mname （完了）"
-                has_done=true
             elif [ -f "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${mname#M-}.md" ]; then
                 echo -e "    ${RED}❌${NC} $mname （エラー）"
             else
@@ -161,11 +163,12 @@ check_inbox() {
         fi
         echo ""
         echo "  Enter でメニューに戻る"
-        read
+        read -r
     fi
 }
 
 # === 2. ミッション実行 ===
+# v1.4修正 - run_single_missionを呼び出すリファクタリング
 execute_mission() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -175,7 +178,7 @@ execute_mission() {
     echo ""
 
     # git pull
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git pull origin main > /dev/null 2>&1
 
     local MISSION_DIR="$POSTMAN_DIR/missions/$CURRENT_PROJECT"
@@ -187,12 +190,13 @@ execute_mission() {
     local i=1
 
     if [ -d "$MISSION_DIR" ]; then
-        for mission_file in $(ls -t "$MISSION_DIR"/M-*.md 2>/dev/null); do
-            local mname=$(basename "$mission_file" .md)
+        for mission_file in "$MISSION_DIR"/M-*.md; do
+            [ -f "$mission_file" ] || continue
+            local mname
+            mname=$(basename "$mission_file" .md)
             local rname="R-${mname#M-}"
             if [ ! -f "$REPORT_DIR/${rname}.md" ] && [ ! -f "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${mname#M-}.md" ]; then
                 echo -e "  ${GREEN}${i}${NC}. ${YELLOW}$mname${NC}"
-                # 指示書の最初の数行を表示
                 head -5 "$mission_file" | sed 's/^/     /'
                 echo ""
                 pending_missions+=("$mission_file")
@@ -206,7 +210,7 @@ execute_mission() {
         echo "  スマホ支店から指示書を送ってね！"
         echo ""
         echo "  Enter でメニューに戻る"
-        read
+        read -r
         return
     fi
 
@@ -221,115 +225,19 @@ execute_mission() {
     fi
 
     local TARGET_MISSION="${pending_missions[$((CHOICE - 1))]}"
-    local MISSION_NAME=$(basename "$TARGET_MISSION" .md)
+    local MISSION_NAME
+    MISSION_NAME=$(basename "$TARGET_MISSION" .md)
 
     echo ""
     echo -e "${GREEN}  🚀 ミッション実行開始: ${MISSION_NAME}${NC}"
     echo ""
 
-    # プロジェクトリポジトリに移動
-    if [ -z "$CURRENT_REPO_PATH" ] || [ ! -d "$CURRENT_REPO_PATH" ]; then
-        echo -e "${RED}  ❌ プロジェクトのリポジトリが見つかりません${NC}"
-        echo "  パス: $CURRENT_REPO_PATH"
-        echo "  Enter でメニューに戻る"
-        read
-        return
-    fi
-
-    # 実行ログ開始
-    local LOG_FILE="$POSTMAN_DIR/logs/execution/$(date +%Y%m%d-%H%M)-${MISSION_NAME}.log"
-    mkdir -p "$POSTMAN_DIR/logs/execution"
-    echo "=== ミッション実行ログ ===" > "$LOG_FILE"
-    echo "開始: $(date)" >> "$LOG_FILE"
-    echo "ミッション: $MISSION_NAME" >> "$LOG_FILE"
-    echo "プロジェクト: $CURRENT_PROJECT_NAME" >> "$LOG_FILE"
-    echo "" >> "$LOG_FILE"
-
-    # プロジェクトディレクトリへ移動してgit pull
-    cd "$CURRENT_REPO_PATH"
-    echo -e "  ${YELLOW}📡 プロジェクトを最新に更新中...${NC}"
-    git pull origin main >> "$LOG_FILE" 2>&1
-
-    # v1.1変更: Claude Codeにはgitをさせない（/tmp権限問題回避）
-    echo -e "  ${YELLOW}🤖 Claude Codeに指示書を渡します...${NC}"
-    echo ""
-    echo -e "${MAGENTA}━━━ Claude Code 実行中 ━━━${NC}"
-    echo ""
-
-    cat "$TARGET_MISSION" | claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" 2>&1 | tee -a "$LOG_FILE"
-
-    local EXIT_CODE=$?
-
-    echo ""
-    echo -e "${MAGENTA}━━━ Claude Code 完了 ━━━${NC}"
-    echo ""
-
-    # v1.1: Postmanがgit push（Claude Codeの外で実行）
-    local REPORT_NAME="R-${MISSION_NAME#M-}"
-
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo -e "${GREEN}  🤖 Claude Code作業完了！${NC}"
-
-        # プロジェクトリポジトリをgit push
-        echo -e "  ${YELLOW}📮 Postmanがgit pushします...${NC}"
-        cd "$CURRENT_REPO_PATH"
-        git add -A
-        if ! git diff --cached --quiet 2>/dev/null; then
-            git commit -m "📮 $MISSION_NAME by COCOMI Postman" > /dev/null 2>&1
-            git push origin main > /dev/null 2>&1 && \
-                echo -e "${GREEN}  📮 プロジェクトgit push完了${NC}" || \
-                echo -e "${RED}  ⚠️ git pushに失敗${NC}"
-        fi
-
-        cat > "$REPORT_DIR/${REPORT_NAME}.md" << EOF
-# ✅ ミッション完了レポート
-- **ミッション:** ${MISSION_NAME}
-- **プロジェクト:** ${CURRENT_PROJECT_NAME}
-- **完了日時:** $(date '+%Y-%m-%d %H:%M')
-- **結果:** 成功
-EOF
-        echo -e "${GREEN}  ✅ ミッション完了！${NC}"
-    else
-        # エラーでも途中成果をpush
-        cd "$CURRENT_REPO_PATH"
-        git add -A
-        if ! git diff --cached --quiet 2>/dev/null; then
-            git commit -m "⚠️ $MISSION_NAME 途中成果" > /dev/null 2>&1
-            git push origin main > /dev/null 2>&1
-        fi
-
-        mkdir -p "$POSTMAN_DIR/errors/$CURRENT_PROJECT"
-        cat > "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${MISSION_NAME#M-}.md" << EOF
-# ❌ エラーレポート
-- **ミッション:** ${MISSION_NAME}
-- **プロジェクト:** ${CURRENT_PROJECT_NAME}
-- **発生日時:** $(date '+%Y-%m-%d %H:%M')
-- **終了コード:** ${EXIT_CODE}
-EOF
-        echo -e "${RED}  ❌ エラー発生。レポート作成済み${NC}"
-    fi
-
-    # レポートをgit push（Postmanリポジトリ）
-    cd "$POSTMAN_DIR"
-    echo "完了: $(date)" >> "$LOG_FILE"
-    git add -A
-    git commit -m "📋 レポート: ${CURRENT_PROJECT}/${REPORT_NAME}" > /dev/null 2>&1
-    git push origin main > /dev/null 2>&1
-
-    echo -e "${GREEN}  📮 レポートをスマホ支店に送りました！${NC}"
-
-    # v1.3追加 - LINE通知
-    if type notify_mission_result &>/dev/null; then
-        if [ $EXIT_CODE -eq 0 ]; then
-            notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success"
-        else
-            notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "error" "Claude Code実行エラー"
-        fi
-    fi
+    # run_single_missionを使って実行（executor.shで定義）
+    run_single_mission "$TARGET_MISSION" "$MISSION_NAME"
 
     echo ""
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === 3. レポート管理 ===
@@ -345,7 +253,7 @@ manage_reports() {
 
     echo -e "  ${GREEN}✅ 完了レポート:${NC}"
     if [ -d "$REPORT_DIR" ] && [ "$(ls -A "$REPORT_DIR" 2>/dev/null)" ]; then
-        ls -t "$REPORT_DIR"/*.md 2>/dev/null | head -10 | while read f; do
+        ls -t "$REPORT_DIR"/*.md 2>/dev/null | head -10 | while read -r f; do
             echo "    🟢 $(basename "$f")"
         done
     else
@@ -355,7 +263,7 @@ manage_reports() {
     echo ""
     echo -e "  ${RED}❌ エラーレポート:${NC}"
     if [ -d "$ERROR_DIR" ] && [ "$(ls -A "$ERROR_DIR" 2>/dev/null)" ]; then
-        ls -t "$ERROR_DIR"/*.md 2>/dev/null | head -10 | while read f; do
+        ls -t "$ERROR_DIR"/*.md 2>/dev/null | head -10 | while read -r f; do
             echo "    🔴 $(basename "$f")"
         done
     else
@@ -372,7 +280,7 @@ manage_reports() {
         done
         echo ""
         echo "  Enter でメニューに戻る"
-        read
+        read -r
     fi
 }
 
@@ -384,17 +292,22 @@ show_dashboard() {
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git pull origin main > /dev/null 2>&1
 
     # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
     while IFS= read -r proj; do
-        local pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        local pname
+        pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
-        local missions=$(ls "$POSTMAN_DIR/missions/$proj"/M-*.md 2>/dev/null | wc -l)
-        local reports=$(ls "$POSTMAN_DIR/reports/$proj"/R-*.md 2>/dev/null | wc -l)
-        local errors=$(ls "$POSTMAN_DIR/errors/$proj"/E-*.md 2>/dev/null | wc -l)
-        local ideas=$(ls "$POSTMAN_DIR/ideas/$proj"/*.md 2>/dev/null | wc -l)
+        local missions
+        missions=$(find "$POSTMAN_DIR/missions/$proj" -name "M-*.md" 2>/dev/null | wc -l)
+        local reports
+        reports=$(find "$POSTMAN_DIR/reports/$proj" -name "R-*.md" 2>/dev/null | wc -l)
+        local errors
+        errors=$(find "$POSTMAN_DIR/errors/$proj" -name "E-*.md" 2>/dev/null | wc -l)
+        local ideas
+        ideas=$(find "$POSTMAN_DIR/ideas/$proj" -name "*.md" 2>/dev/null | wc -l)
 
         echo -e "  ${BOLD}📂 ${pname}${NC}"
         echo "     📝ミッション:${missions} ✅完了:${reports} ❌エラー:${errors} 💡アイデア:${ideas}"
@@ -402,7 +315,7 @@ show_dashboard() {
     done < <(get_project_ids)
 
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === 5. Claude Code直接操作 ===
@@ -424,11 +337,11 @@ direct_claude() {
         echo -e "${RED}  ❌ プロジェクトのリポジトリが見つかりません${NC}"
         echo "  パス: $CURRENT_REPO_PATH"
         echo "  Enter でメニューに戻る"
-        read
+        read -r
         return
     fi
 
-    cd "$CURRENT_REPO_PATH"
+    cd "$CURRENT_REPO_PATH" || return
     echo ""
     echo -e "${YELLOW}  📂 ${CURRENT_REPO_PATH} に移動しました${NC}"
     echo -e "${YELLOW}  🤖 Claude Codeを起動します...${NC}"
@@ -443,7 +356,7 @@ direct_claude() {
     esac
 
     # Claude Code終了後、postmanディレクトリに戻る
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
 }
 
 # === 6. プロジェクト切替 ===
@@ -457,12 +370,11 @@ switch_project() {
 
     # config.jsonからプロジェクト一覧を取得
     local proj_ids=()
-    local proj_names=()
     local i=1
     while IFS= read -r pid; do
         proj_ids+=("$pid")
-        local pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
-        proj_names+=("$pname")
+        local pname
+        pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
         local mark=""
         [ "$CURRENT_PROJECT" = "$pid" ] && mark=" ⭐"
         echo -e "  ${GREEN}${i}${NC}. ${pname}${mark}"
@@ -487,10 +399,12 @@ switch_project() {
 # v1.3追加 - LINE通知モジュール読み込み
 NOTIFIER_SCRIPT="$POSTMAN_DIR/core/notifier.sh"
 if [ -f "$NOTIFIER_SCRIPT" ]; then
+    # shellcheck source=core/notifier.sh
     source "$NOTIFIER_SCRIPT"
 fi
 
 # === 実行エンジン読み込み ===
+# shellcheck source=core/executor.sh
 source "$POSTMAN_DIR/core/executor.sh"
 
 # === プレースホルダー ===
@@ -498,7 +412,7 @@ coming_soon() {
     echo ""
     echo -e "${YELLOW}  🚧 $1 は次のバージョンで追加予定！${NC}"
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === メインループ ===

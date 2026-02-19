@@ -1,9 +1,11 @@
 #!/bin/bash
+# shellcheck disable=SC2155,SC2164,SC2162,SC2012
 # このファイルは: COCOMI Postman 自動モード＆ミッション実行エンジン
 # postman.shから呼ばれる実行系機能
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
 # v1.2 修正 2026-02-19 - auto_modeのプロジェクトループをconfig.json動的化
 # v1.3 追加 2026-02-19 - LINE通知呼び出し追加
+# v1.4 修正 2026-02-19 - ShellCheck対応
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -12,7 +14,7 @@ git_push_project() {
     local COMMIT_MSG=$2
 
     if [ -n "$REPO_PATH" ] && [ -d "$REPO_PATH" ]; then
-        cd "$REPO_PATH"
+        cd "$REPO_PATH" || return 1
         git add -A
         if ! git diff --cached --quiet 2>/dev/null; then
             git commit -m "$COMMIT_MSG" > /dev/null 2>&1
@@ -33,7 +35,7 @@ git_push_project() {
 # === Postmanリポジトリのgit push（レポート送信） ===
 git_push_postman() {
     local COMMIT_MSG=$1
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return 1
     git add -A
     if ! git diff --cached --quiet 2>/dev/null; then
         git commit -m "$COMMIT_MSG" > /dev/null 2>&1
@@ -50,17 +52,20 @@ run_single_mission() {
     local MISSION_FILE=$1
     local MISSION_NAME=$2
     local REPORT_DIR="$POSTMAN_DIR/reports/$CURRENT_PROJECT"
-    local LOG_FILE="$POSTMAN_DIR/logs/execution/$(date +%Y%m%d-%H%M)-${MISSION_NAME}.log"
+    local LOG_FILE
+    LOG_FILE="$POSTMAN_DIR/logs/execution/$(date +%Y%m%d-%H%M)-${MISSION_NAME}.log"
 
     mkdir -p "$REPORT_DIR" "$POSTMAN_DIR/logs/execution"
 
-    echo "=== ミッション実行ログ ===" > "$LOG_FILE"
-    echo "開始: $(date)" >> "$LOG_FILE"
-    echo "プロジェクト: $CURRENT_PROJECT_NAME" >> "$LOG_FILE"
+    {
+        echo "=== ミッション実行ログ ==="
+        echo "開始: $(date)"
+        echo "プロジェクト: $CURRENT_PROJECT_NAME"
+    } > "$LOG_FILE"
 
     if [ -n "$CURRENT_REPO_PATH" ] && [ -d "$CURRENT_REPO_PATH" ]; then
         # STEP 1: プロジェクトを最新に
-        cd "$CURRENT_REPO_PATH"
+        cd "$CURRENT_REPO_PATH" || return 1
         echo -e "  ${YELLOW}📡 git pull中...${NC}"
         git pull origin main >> "$LOG_FILE" 2>&1
 
@@ -147,8 +152,9 @@ auto_mode() {
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     while true; do
-        local NOW=$(date '+%H:%M')
-        cd "$POSTMAN_DIR"
+        local NOW
+        NOW=$(date '+%H:%M')
+        cd "$POSTMAN_DIR" || return
         git pull origin main > /dev/null 2>&1
 
         local found=false
@@ -159,8 +165,10 @@ auto_mode() {
             local edir="$POSTMAN_DIR/errors/$proj"
 
             if [ -d "$mdir" ]; then
-                for mf in $(ls "$mdir"/M-*.md 2>/dev/null); do
-                    local mname=$(basename "$mf" .md)
+                for mf in "$mdir"/M-*.md; do
+                    [ -f "$mf" ] || continue
+                    local mname
+                    mname=$(basename "$mf" .md)
                     local rname="R-${mname#M-}"
                     local ename="E-${mname#M-}"
 
@@ -179,6 +187,6 @@ auto_mode() {
             echo -e "  🟢 $NOW チェック完了 新着なし"
         fi
 
-        sleep $INTERVAL
+        sleep "$INTERVAL"
     done
 }

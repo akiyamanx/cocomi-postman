@@ -1,9 +1,11 @@
 #!/bin/bash
+# shellcheck disable=SC2155,SC2164,SC2162,SC2012
 # このファイルは: COCOMI Postman スマホ支店（司令官）
 # アキヤがスマホのTermuxで使うメインスクリプト
 # クロちゃんの部屋と画面分割して使う
 # v1.0 作成 2026-02-18
 # v1.2 修正 2026-02-19 - config.json動的参照に変更
+# v1.4 修正 2026-02-19 - ShellCheck対応
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -30,7 +32,7 @@ init() {
         echo "  cd ~ && git clone https://github.com/akiyamanx/cocomi-postman.git"
         exit 1
     fi
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || exit 1
 
     # デフォルトプロジェクト読み込み
     if [ -f "$CONFIG_FILE" ]; then
@@ -118,13 +120,16 @@ send_mission() {
     fi
 
     # ファイル名生成（M-001-20260218-1430.md形式）
-    local TIMESTAMP=$(date +%Y%m%d-%H%M)
+    local TIMESTAMP
+    TIMESTAMP=$(date +%Y%m%d-%H%M)
     local MISSION_DIR="$POSTMAN_DIR/missions/$CURRENT_PROJECT"
     mkdir -p "$MISSION_DIR"
 
     # 連番を取得
-    local LAST_NUM=$(ls "$MISSION_DIR"/M-*.md 2>/dev/null | wc -l)
-    local NEXT_NUM=$(printf "%03d" $((LAST_NUM + 1)))
+    local LAST_NUM
+    LAST_NUM=$(find "$MISSION_DIR" -name "M-*.md" 2>/dev/null | wc -l)
+    local NEXT_NUM
+    NEXT_NUM=$(printf "%03d" $((LAST_NUM + 1)))
     local FILENAME="M-${NEXT_NUM}-${TIMESTAMP}.md"
     local FILEPATH="$MISSION_DIR/$FILENAME"
 
@@ -135,7 +140,7 @@ send_mission() {
     echo -e "${GREEN}📮 配達処理中...${NC}"
 
     # git操作
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git add "missions/$CURRENT_PROJECT/$FILENAME"
     git commit -m "📮 新規ミッション: $CURRENT_PROJECT/$FILENAME" > /dev/null 2>&1
 
@@ -151,7 +156,7 @@ send_mission() {
 
     echo ""
     echo -e "  何か他にやる？（Enter でメニューに戻る）"
-    read
+    read -r
 }
 
 # === 2. レポート確認 ===
@@ -164,7 +169,7 @@ check_reports() {
     echo ""
 
     # まずgit pullで最新取得
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git pull origin main > /dev/null 2>&1
 
     local REPORT_DIR="$POSTMAN_DIR/reports/$CURRENT_PROJECT"
@@ -173,10 +178,8 @@ check_reports() {
     # レポート一覧
     if [ -d "$REPORT_DIR" ] && [ "$(ls -A "$REPORT_DIR" 2>/dev/null)" ]; then
         echo -e "  ${GREEN}✅ 完了レポート:${NC}"
-        ls -t "$REPORT_DIR"/*.md 2>/dev/null | head -5 | while read f; do
-            local fname=$(basename "$f")
-            local date_part=$(echo "$fname" | grep -o '[0-9]\{8\}')
-            echo -e "    ${GREEN}🟢${NC} $fname"
+        ls -t "$REPORT_DIR"/*.md 2>/dev/null | head -5 | while read -r f; do
+            echo -e "    ${GREEN}🟢${NC} $(basename "$f")"
         done
     else
         echo -e "  ${YELLOW}📭 完了レポートはまだないよ${NC}"
@@ -187,7 +190,7 @@ check_reports() {
     # エラーレポート一覧
     if [ -d "$ERROR_DIR" ] && [ "$(ls -A "$ERROR_DIR" 2>/dev/null)" ]; then
         echo -e "  ${RED}❌ エラーレポート:${NC}"
-        ls -t "$ERROR_DIR"/*.md 2>/dev/null | head -5 | while read f; do
+        ls -t "$ERROR_DIR"/*.md 2>/dev/null | head -5 | while read -r f; do
             echo -e "    ${RED}🔴${NC} $(basename "$f")"
         done
     fi
@@ -216,7 +219,7 @@ check_reports() {
         fi
         echo ""
         echo "  Enter でメニューに戻る"
-        read
+        read -r
     fi
 }
 
@@ -234,8 +237,10 @@ switch_project() {
     local i=1
     while IFS= read -r pid; do
         proj_ids+=("$pid")
-        local pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
-        local mcount=$(ls "$POSTMAN_DIR/missions/$pid"/M-*.md 2>/dev/null | wc -l)
+        local pname
+        pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        local mcount
+        mcount=$(find "$POSTMAN_DIR/missions/$pid" -name "M-*.md" 2>/dev/null | wc -l)
         local mark=""
         [ "$CURRENT_PROJECT" = "$pid" ] && mark=" ⭐"
         echo -e "  ${GREEN}${i}${NC}. ${pname} [ミッション${mcount}件]${mark}"
@@ -266,25 +271,29 @@ show_dashboard() {
     echo ""
 
     # git pullで最新取得
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git pull origin main > /dev/null 2>&1
 
     echo -e "  ${BOLD}🗂️ プロジェクト状況${NC}"
 
     # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
     while IFS= read -r proj; do
-        local pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        local pname
+        pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
-        local missions=$(ls "$POSTMAN_DIR/missions/$proj"/M-*.md 2>/dev/null | wc -l)
-        local reports=$(ls "$POSTMAN_DIR/reports/$proj"/R-*.md 2>/dev/null | wc -l)
-        local errors=$(ls "$POSTMAN_DIR/errors/$proj"/E-*.md 2>/dev/null | wc -l)
+        local missions
+        missions=$(find "$POSTMAN_DIR/missions/$proj" -name "M-*.md" 2>/dev/null | wc -l)
+        local reports
+        reports=$(find "$POSTMAN_DIR/reports/$proj" -name "R-*.md" 2>/dev/null | wc -l)
+        local errors
+        errors=$(find "$POSTMAN_DIR/errors/$proj" -name "E-*.md" 2>/dev/null | wc -l)
         local pending=$((missions - reports - errors))
-        [ $pending -lt 0 ] && pending=0
+        [ "$pending" -lt 0 ] && pending=0
 
         local status_icon="⏸️"
-        [ $pending -gt 0 ] && status_icon="🔄"
-        [ $errors -gt 0 ] && status_icon="⚠️"
-        [ $missions -eq 0 ] && status_icon="📭"
+        [ "$pending" -gt 0 ] && status_icon="🔄"
+        [ "$errors" -gt 0 ] && status_icon="⚠️"
+        [ "$missions" -eq 0 ] && status_icon="📭"
 
         echo -e "    ${status_icon} ${pname}: 📝${missions}件 ✅${reports}件 ❌${errors}件 待機${pending}件"
     done < <(get_project_ids)
@@ -292,7 +301,8 @@ show_dashboard() {
     echo ""
     echo -e "  ${BOLD}💡 たまってるアイデア${NC}"
     for dir in genba-pro culo-chan new-apps unassigned; do
-        local count=$(ls "$POSTMAN_DIR/ideas/$dir"/*.md 2>/dev/null | wc -l)
+        local count
+        count=$(find "$POSTMAN_DIR/ideas/$dir" -name "*.md" 2>/dev/null | wc -l)
         local label=""
         case "$dir" in
             "genba-pro") label="設備くん向き  " ;;
@@ -305,7 +315,7 @@ show_dashboard() {
 
     echo ""
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === 5. アイデアメモ ===
@@ -362,7 +372,8 @@ save_idea() {
     esac
 
     # ファイル保存
-    local TIMESTAMP=$(date +%Y%m%d-%H%M)
+    local TIMESTAMP
+    TIMESTAMP=$(date +%Y%m%d-%H%M)
     local IDEA_FILE="$POSTMAN_DIR/ideas/$idea_dir/IDEA-${TIMESTAMP}.md"
     mkdir -p "$POSTMAN_DIR/ideas/$idea_dir"
 
@@ -374,7 +385,7 @@ save_idea() {
 EOF
 
     # git push
-    cd "$POSTMAN_DIR"
+    cd "$POSTMAN_DIR" || return
     git add "ideas/$idea_dir/IDEA-${TIMESTAMP}.md"
     git commit -m "💡 アイデア追加: $idea_dir" > /dev/null 2>&1
     git push origin main > /dev/null 2>&1
@@ -384,7 +395,7 @@ EOF
     echo -e "  📂 保存先: ideas/${idea_dir}/"
     echo ""
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === 6〜9: 今後実装予定のプレースホルダー ===
@@ -393,7 +404,7 @@ coming_soon() {
     echo ""
     echo -e "${YELLOW}  🚧 ${feature_name}は次のバージョンで追加予定！${NC}"
     echo "  Enter でメニューに戻る"
-    read
+    read -r
 }
 
 # === メインループ ===

@@ -1,0 +1,189 @@
+# このファイルはCOCOMI Postmanの自動テスト審査ワークフロー
+# v1.4追加 - GitHub Actionsテスト審査システム
+name: 📮 COCOMI Postman テスト審査
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cocomi-test:
+    runs-on: ubuntu-latest
+    name: 🔍 COCOMIテスト審査
+
+    steps:
+    # ① リポジトリ取得
+    - name: 📥 コード取得
+      uses: actions/checkout@v4
+
+    # ② ShellCheck 構文チェック
+    - name: 🐛 ShellCheck - シェルスクリプト構文チェック
+      run: |
+        sudo apt-get install -y shellcheck
+        echo "=== ShellCheck 開始 ==="
+        ERRORS=0
+        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+          echo "チェック中: $f"
+          if shellcheck -e SC1091,SC2034 "$f"; then
+            echo "  ✅ $f OK"
+          else
+            echo "  ❌ $f にエラーあり"
+            ERRORS=$((ERRORS + 1))
+          fi
+        done
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ ShellCheck: ${ERRORS}ファイルにエラー"
+          exit 1
+        fi
+        echo "✅ ShellCheck: 全ファイル通過！"
+
+    # ③ COCOMIルール - 500行チェック
+    - name: 📐 COCOMIルール - 500行以内チェック
+      run: |
+        echo "=== 500行チェック 開始 ==="
+        ERRORS=0
+        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+          lines=$(wc -l < "$f")
+          if [ "$lines" -gt 500 ]; then
+            echo "  ❌ $f: ${lines}行（500行以内にしてね！）"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "  ✅ $f: ${lines}行 OK"
+          fi
+        done
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ 500行ルール: ${ERRORS}ファイルが超過"
+          exit 1
+        fi
+        echo "✅ 500行ルール: 全ファイル通過！"
+
+    # ④ COCOMIルール - ファイル先頭コメントチェック
+    - name: 📐 COCOMIルール - ファイル先頭コメント
+      run: |
+        echo "=== 先頭コメントチェック 開始 ==="
+        ERRORS=0
+        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+          # shebang行（#!/...）の後にコメント（#で始まる行）があるか
+          # 先頭5行以内に日本語or英語のコメントがあればOK
+          if head -5 "$f" | tail -4 | grep -q "^#"; then
+            echo "  ✅ $f: 先頭コメント OK"
+          else
+            echo "  ❌ $f: ファイル説明コメントがないよ！"
+            ERRORS=$((ERRORS + 1))
+          fi
+        done
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ 先頭コメント: ${ERRORS}ファイルが未記載"
+          exit 1
+        fi
+        echo "✅ 先頭コメント: 全ファイル通過！"
+
+    # ⑤ COCOMIルール - バージョン番号チェック
+    - name: 📐 COCOMIルール - バージョン番号
+      run: |
+        echo "=== バージョン番号チェック 開始 ==="
+        ERRORS=0
+        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+          if grep -q "v[0-9]" "$f"; then
+            VER=$(grep -o "v[0-9][0-9.]*" "$f" | head -1)
+            echo "  ✅ $f: バージョン ${VER} OK"
+          else
+            echo "  ❌ $f: バージョン番号がないよ！"
+            ERRORS=$((ERRORS + 1))
+          fi
+        done
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ バージョン番号: ${ERRORS}ファイルが未記載"
+          exit 1
+        fi
+        echo "✅ バージョン番号: 全ファイル通過！"
+
+    # ⑥ セキュリティ - 機密ファイルチェック
+    - name: 🛡️ セキュリティ - 機密ファイル漏洩チェック
+      run: |
+        echo "=== 機密ファイルチェック 開始 ==="
+        ERRORS=0
+        # config.jsonがリポジトリに含まれていないか
+        if [ -f config.json ]; then
+          echo "  ❌ config.jsonがリポジトリに入ってる！トークン漏洩危険！"
+          ERRORS=$((ERRORS + 1))
+        else
+          echo "  ✅ config.json は除外されてる OK"
+        fi
+        # APIキーやトークンがハードコードされていないか
+        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+          if grep -qE "(ghp_|sk-ant-|xoxb-|Bearer )" "$f"; then
+            echo "  ❌ $f: APIキーらしき文字列がハードコードされてる！"
+            ERRORS=$((ERRORS + 1))
+          fi
+        done
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ セキュリティ: ${ERRORS}件の問題"
+          exit 1
+        fi
+        echo "✅ セキュリティ: 全チェック通過！"
+
+    # ⑦ テスト結果サマリー
+    - name: 📊 テスト結果サマリー
+      if: always()
+      run: |
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📮 COCOMI Postman テスト審査完了！"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  🐛 ShellCheck構文チェック"
+        echo "  📐 500行ルール"
+        echo "  📐 先頭コメント"
+        echo "  📐 バージョン番号"
+        echo "  🛡️ セキュリティ"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # ⑧ LINE通知（成功時）
+    - name: 📱 LINE通知 - 成功
+      if: success()
+      env:
+        LINE_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+      run: |
+        if [ -n "$LINE_TOKEN" ] && [ -n "$LINE_USER_ID" ]; then
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${LINE_TOKEN}" \
+            -d "{
+              \"to\": \"${LINE_USER_ID}\",
+              \"messages\": [{
+                \"type\": \"text\",
+                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n✅ 全テスト通過！\n\nコミット: ${COMMIT_MSG}\n\n🐛 ShellCheck OK\n📐 500行ルール OK\n📐 先頭コメント OK\n📐 バージョン番号 OK\n🛡️ セキュリティ OK\"
+              }]
+            }"
+          echo "📱 LINE通知送信完了"
+        else
+          echo "⚠️ LINE設定なし（スキップ）"
+        fi
+
+    # ⑨ LINE通知（失敗時）
+    - name: 📱 LINE通知 - 失敗
+      if: failure()
+      env:
+        LINE_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+      run: |
+        if [ -n "$LINE_TOKEN" ] && [ -n "$LINE_USER_ID" ]; then
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${LINE_TOKEN}" \
+            -d "{
+              \"to\": \"${LINE_USER_ID}\",
+              \"messages\": [{
+                \"type\": \"text\",
+                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n❌ テスト失敗！\n\nコミット: ${COMMIT_MSG}\n\nGitHub Actionsのログを確認してね！\nhttps://github.com/akiyamanx/cocomi-postman/actions\"
+              }]
+            }"
+          echo "📱 LINE通知送信完了"
+        else
+          echo "⚠️ LINE設定なし（スキップ）"
+        fi
