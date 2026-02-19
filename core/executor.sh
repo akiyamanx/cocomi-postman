@@ -3,6 +3,7 @@
 # postman.shから呼ばれる実行系機能
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
 # v1.2 修正 2026-02-19 - auto_modeのプロジェクトループをconfig.json動的化
+# v1.3 追加 2026-02-19 - LINE通知呼び出し追加
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -82,6 +83,11 @@ run_single_mission() {
 - **結果:** 成功
 EOF
             echo -e "  ${GREEN}✅ $MISSION_NAME 完了！${NC}"
+
+            # v1.3追加 - LINE通知（成功時）
+            if type notify_mission_result &>/dev/null; then
+                notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success"
+            fi
         else
             echo -e "  ${RED}🤖 エラー発生${NC}"
             git_push_project "$CURRENT_REPO_PATH" "⚠️ $MISSION_NAME 途中成果"
@@ -95,6 +101,11 @@ EOF
 - **終了コード:** ${EXIT_CODE}
 EOF
             echo -e "  ${RED}❌ $MISSION_NAME エラー${NC}"
+
+            # v1.3追加 - LINE通知（エラー時）
+            if type notify_mission_result &>/dev/null; then
+                notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "error" "Claude Code実行エラー"
+            fi
         fi
 
         # STEP 4: レポートをpush

@@ -3,6 +3,7 @@
 # タブレットのTermuxで動く実行管理メインスクリプト
 # v1.1 修正 2026-02-18 - git pushをClaude Code外で実行する設計に変更
 # v1.2 修正 2026-02-19 - config.json動的参照＋postman自身プロジェクト登録
+# v1.3 追加 2026-02-19 - LINE Messaging API通知機能
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -316,6 +317,16 @@ EOF
     git push origin main > /dev/null 2>&1
 
     echo -e "${GREEN}  📮 レポートをスマホ支店に送りました！${NC}"
+
+    # v1.3追加 - LINE通知
+    if type notify_mission_result &>/dev/null; then
+        if [ $EXIT_CODE -eq 0 ]; then
+            notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success"
+        else
+            notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "error" "Claude Code実行エラー"
+        fi
+    fi
+
     echo ""
     echo "  Enter でメニューに戻る"
     read
@@ -472,6 +483,12 @@ switch_project() {
     echo -e "  ${GREEN}✅ ${CURRENT_PROJECT_NAME} に切り替えたよ！${NC}"
     sleep 1
 }
+
+# v1.3追加 - LINE通知モジュール読み込み
+NOTIFIER_SCRIPT="$POSTMAN_DIR/core/notifier.sh"
+if [ -f "$NOTIFIER_SCRIPT" ]; then
+    source "$NOTIFIER_SCRIPT"
+fi
 
 # === 実行エンジン読み込み ===
 source "$POSTMAN_DIR/core/executor.sh"
