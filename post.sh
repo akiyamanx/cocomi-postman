@@ -210,7 +210,7 @@ check_reports() {
             echo ""
             # Termuxのクリップボードにコピー（termux-clipboard-set使用）
             if command -v termux-clipboard-set &> /dev/null; then
-                cat "$TARGET" | termux-clipboard-set
+                termux-clipboard-set < "$TARGET"
                 echo -e "${GREEN}📋 クリップボードにコピーしたよ！${NC}"
                 echo "  → クロちゃんの部屋にペーストしてね"
             fi

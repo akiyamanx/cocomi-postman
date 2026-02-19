@@ -71,7 +71,7 @@ run_single_mission() {
 
         # STEP 2: Claude Codeで作業（gitはさせない！）
         echo -e "  ${YELLOW}🤖 Claude Code実行中...${NC}"
-        cat "$MISSION_FILE" | claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" >> "$LOG_FILE" 2>&1
+        claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
         local EXIT_CODE=$?
 
         # STEP 3: Postmanがgit push（/tmp問題回避）
