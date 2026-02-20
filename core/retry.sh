@@ -35,6 +35,15 @@ run_with_retry() {
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- 初回実行成功: $(date) ---" >> "$LOG_FILE"
+        # v1.5追加 - 成功時も作業サマリーを取得
+        ANALYSIS=$(claude -p "Summarize what you just did:
+- What files were created/modified/deleted
+- What was the main task accomplished
+- Any issues encountered during the work
+Report in English. Be concise." --continue 2>&1)
+        if [ -z "$ANALYSIS" ]; then
+            ANALYSIS="(No summary available)"
+        fi
         return 0
     fi
 
@@ -55,6 +64,15 @@ run_with_retry() {
         if [ $EXIT_CODE -eq 0 ]; then
             echo "--- リトライ ${i} で成功: $(date) ---" >> "$LOG_FILE"
             echo -e "  ${GREEN}🔄 リトライ${i}回目で成功！${NC}"
+            # v1.5追加 - 成功時も作業サマリーを取得
+            ANALYSIS=$(claude -p "Summarize what you just did:
+- What files were created/modified/deleted
+- What was the main task accomplished
+- Any issues encountered during the work
+Report in English. Be concise." --continue 2>&1)
+            if [ -z "$ANALYSIS" ]; then
+                ANALYSIS="(No summary available)"
+            fi
             return 0
         fi
 
@@ -71,6 +89,15 @@ run_with_retry() {
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- --continue 成功: $(date) ---" >> "$LOG_FILE"
         echo -e "  ${GREEN}🔄 --continueで成功！${NC}"
+        # v1.5追加 - 成功時も作業サマリーを取得
+        ANALYSIS=$(claude -p "Summarize what you just did:
+- What files were created/modified/deleted
+- What was the main task accomplished
+- Any issues encountered during the work
+Report in English. Be concise." --continue 2>&1)
+        if [ -z "$ANALYSIS" ]; then
+            ANALYSIS="(No summary available)"
+        fi
         return 0
     fi
 

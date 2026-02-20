@@ -90,12 +90,27 @@ run_single_mission() {
                 RETRY_INFO="（リトライ${RETRY_COUNT}回目で成功）"
             fi
 
+            # v1.5修正 - 成功時も二層構造レポート（作業サマリー付き）
             cat > "$REPORT_DIR/${REPORT_NAME}.md" << EOF
-# ✅ ミッション完了レポート
-- **ミッション:** ${MISSION_NAME}
+# ✅ Mission Report: ${MISSION_NAME}
+
+## 📱 アキヤ向けサマリー（日本語）
+- **状態:** ✅ 成功${RETRY_INFO}
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **完了日時:** $(date '+%Y-%m-%d %H:%M')
-- **結果:** 成功${RETRY_INFO}
+
+---
+
+## 🤖 AI Work Summary (for Claude/Gemini/GPT)
+
+### Execution Context
+- **Mission:** ${MISSION_NAME}
+- **Project:** ${CURRENT_PROJECT_NAME}
+- **Retry attempts:** ${RETRY_COUNT}/3
+- **Timestamp:** $(date '+%Y-%m-%dT%H:%M:%S')
+
+### Claude Code Work Summary
+${ANALYSIS}
 EOF
             echo -e "  ${GREEN}✅ $MISSION_NAME 完了！${RETRY_INFO}${NC}"
 
