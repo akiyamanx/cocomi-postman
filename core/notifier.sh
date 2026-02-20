@@ -32,6 +32,8 @@ send_line_notify() {
     fi
 
     # 送信（認証ヘッダのリテラルを変数化してセキュリティチェック誤検知を回避）
+    # v1.5修正 - 改行をLINE API用にエスケープ
+    message=$(printf '%s' "$message" | sed ':a;N;$!ba;s/\n/\\n/g')
     local auth_type="Bearer"
     local response
     response=$(curl -s -o /dev/null -w "%{http_code}" \
