@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2155,SC2164,SC2162
+# shellcheck disable=SC2155,SC2164,SC2162,SC2129
 # このファイルは: COCOMI Postman リトライ＆自動継続エンジン
 # Claude Code実行失敗時の自動リトライ、--continue継続、自己分析レポート生成
 # v1.5 追加 2026-02-20 - Phase C: Retry + Continue + AI Self-Analysis
