@@ -53,3 +53,4 @@ cocomi-postman/
 *COCOMIファミリー 2026*
 # test
 # test
+<!-- Phase C: Retry + Report v1.5 tested -->
