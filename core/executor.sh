@@ -6,6 +6,7 @@
 # v1.2 修正 2026-02-19 - auto_modeのプロジェクトループをconfig.json動的化
 # v1.3 追加 2026-02-19 - LINE通知呼び出し追加
 # v1.4 修正 2026-02-19 - ShellCheck対応
+# v1.5 修正 2026-02-20 - Phase C: リトライ機構統合（retry.sh連携）
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -69,9 +70,12 @@ run_single_mission() {
         echo -e "  ${YELLOW}📡 git pull中...${NC}"
         git pull origin main >> "$LOG_FILE" 2>&1
 
-        # STEP 2: Claude Codeで作業（gitはさせない！）
+        # STEP 2: Claude Codeで作業（リトライ機構付き）
         echo -e "  ${YELLOW}🤖 Claude Code実行中...${NC}"
-        claude -p --allowedTools "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
+        # v1.5 retry.sh読み込み＆リトライ付き実行
+        # shellcheck source=core/retry.sh
+        source "$POSTMAN_DIR/core/retry.sh"
+        run_with_retry "$MISSION_FILE" "$MISSION_NAME" "$LOG_FILE" "$CURRENT_REPO_PATH"
         local EXIT_CODE=$?
 
         # STEP 3: Postmanがgit push（/tmp問題回避）
@@ -80,36 +84,43 @@ run_single_mission() {
             echo -e "  ${GREEN}🤖 Claude Code作業完了！${NC}"
             git_push_project "$CURRENT_REPO_PATH" "📮 $MISSION_NAME by COCOMI Postman"
 
+            # v1.5修正 - リトライ回数をレポートに含める
+            local RETRY_INFO=""
+            if [ "$RETRY_COUNT" -gt 0 ]; then
+                RETRY_INFO="（リトライ${RETRY_COUNT}回目で成功）"
+            fi
+
             cat > "$REPORT_DIR/${REPORT_NAME}.md" << EOF
 # ✅ ミッション完了レポート
 - **ミッション:** ${MISSION_NAME}
 - **プロジェクト:** ${CURRENT_PROJECT_NAME}
 - **完了日時:** $(date '+%Y-%m-%d %H:%M')
-- **結果:** 成功
+- **結果:** 成功${RETRY_INFO}
 EOF
-            echo -e "  ${GREEN}✅ $MISSION_NAME 完了！${NC}"
+            echo -e "  ${GREEN}✅ $MISSION_NAME 完了！${RETRY_INFO}${NC}"
 
-            # v1.3追加 - LINE通知（成功時）
+            # v1.3追加 v1.5修正 - LINE通知（成功時）リトライ情報付き
             if type notify_mission_result &>/dev/null; then
-                notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success"
+                if [ "$RETRY_COUNT" -gt 0 ]; then
+                    notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success" "リトライ${RETRY_COUNT}回目で成功"
+                else
+                    notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "success"
+                fi
             fi
         else
-            echo -e "  ${RED}🤖 エラー発生${NC}"
+            echo -e "  ${RED}🤖 エラー発生（リトライ済み）${NC}"
             git_push_project "$CURRENT_REPO_PATH" "⚠️ $MISSION_NAME 途中成果"
 
+            # v1.5修正 - retry.shの二層構造エラーレポート生成
             mkdir -p "$POSTMAN_DIR/errors/$CURRENT_PROJECT"
-            cat > "$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${MISSION_NAME#M-}.md" << EOF
-# ❌ エラーレポート
-- **ミッション:** ${MISSION_NAME}
-- **プロジェクト:** ${CURRENT_PROJECT_NAME}
-- **発生日時:** $(date '+%Y-%m-%d %H:%M')
-- **終了コード:** ${EXIT_CODE}
-EOF
-            echo -e "  ${RED}❌ $MISSION_NAME エラー${NC}"
+            local ERROR_REPORT_PATH="$POSTMAN_DIR/errors/$CURRENT_PROJECT/E-${MISSION_NAME#M-}.md"
+            generate_error_report "$MISSION_NAME" "$CURRENT_PROJECT_NAME" "$RETRY_COUNT" "$CONTINUE_TRIED" "$ANALYSIS" "$LOG_FILE" "$ERROR_REPORT_PATH"
 
-            # v1.3追加 - LINE通知（エラー時）
+            echo -e "  ${RED}❌ $MISSION_NAME エラー（リトライ${RETRY_COUNT}回実施済み）${NC}"
+
+            # v1.3追加 v1.5修正 - LINE通知（エラー時）リトライ情報付き
             if type notify_mission_result &>/dev/null; then
-                notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "error" "Claude Code実行エラー"
+                notify_mission_result "$CURRENT_PROJECT_NAME" "$MISSION_NAME" "error" "リトライ${RETRY_COUNT}回+continue全て失敗。レポートをクロちゃんに見せてね！"
             fi
         fi
 
