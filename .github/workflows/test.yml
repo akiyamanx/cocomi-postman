@@ -156,7 +156,7 @@ jobs:
               \"to\": \"${LINE_USER_ID}\",
               \"messages\": [{
                 \"type\": \"text\",
-                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n✅ 全テスト通過！\n\nコミット: ${COMMIT_MSG}\n\n🐛 ShellCheck OK\n📐 500行ルール OK\n📐 先頭コメント OK\n📐 バージョン番号 OK\n🛡️ セキュリティ OK\"
+                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n✅ 全テスト通過！\n\nコミット: ${COMMIT_MSG}\n\n🐛 ShellCheck OK\n📐 500行ルール OK\n📐 先頭コメント OK\n📐 バージョン番号 OK\n🛡️ セキュリティ OK\n\n📎 https://github.com/akiyamanx/cocomi-postman/actions\"
               }]
             }"
           echo "📱 LINE通知送信完了"
