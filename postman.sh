@@ -6,6 +6,7 @@
 # v1.2 修正 2026-02-19 - config.json動的参照＋postman自身プロジェクト登録
 # v1.3 追加 2026-02-19 - LINE Messaging API通知機能
 # v1.4 修正 2026-02-19 - ShellCheck対応＋execute_missionリファクタリング
+# v2.0 追加 2026-02-22 - ステップ実行エンジン読み込み
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -406,6 +407,12 @@ fi
 # === 実行エンジン読み込み ===
 # shellcheck source=core/executor.sh
 source "$POSTMAN_DIR/core/executor.sh"
+
+# v2.0追加 - ステップ実行エンジン読み込み
+# shellcheck source=core/step-runner.sh
+if [ -f "$POSTMAN_DIR/core/step-runner.sh" ]; then
+    source "$POSTMAN_DIR/core/step-runner.sh"
+fi
 
 # === プレースホルダー ===
 coming_soon() {

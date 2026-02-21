@@ -16,3 +16,6 @@ Thumbs.db
 # ログ（大量になる可能性があるため）
 logs/execution/*.log
 logs/history/*.log
+
+# ステップ実行の一時ファイル
+.step-temp/

@@ -8,6 +8,7 @@
 # v1.4 修正 2026-02-19 - ShellCheck対応
 # v1.5 修正 2026-02-20 - Phase C: リトライ機構統合（retry.sh連携）
 # v1.6 修正 2026-02-21 - git push競合対策（pull --rebase+リトライ追加）
+# v2.0 追加 2026-02-22 - ステップ実行判定分岐（step-runner.sh連携）
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -75,6 +76,14 @@ run_single_mission() {
     LOG_FILE="$POSTMAN_DIR/logs/execution/$(date +%Y%m%d-%H%M)-${MISSION_NAME}.log"
 
     mkdir -p "$REPORT_DIR" "$POSTMAN_DIR/logs/execution"
+
+    # v2.0追加 - ステップ実行判定
+    # 指示書に ### Step N/M 記法があればステップ実行モードへ分岐
+    if has_steps "$MISSION_FILE"; then
+        echo -e "  ${CYAN}📋 ステップ付き指示書を検出！ステップ実行モードに切り替えます${NC}"
+        run_step_mission "$MISSION_FILE" "$MISSION_NAME"
+        return $?
+    fi
 
     {
         echo "=== ミッション実行ログ ==="
