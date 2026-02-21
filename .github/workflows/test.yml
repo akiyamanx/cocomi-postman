@@ -164,7 +164,7 @@ jobs:
           echo "⚠️ LINE設定なし（スキップ）"
         fi
 
-    # ⑨ LINE通知（失敗時）
+    # ⑨ LINE通知（失敗時） # v1.6 失敗時にも📎リンク追加
     - name: 📱 LINE通知 - 失敗
       if: failure()
       env:
@@ -180,7 +180,7 @@ jobs:
               \"to\": \"${LINE_USER_ID}\",
               \"messages\": [{
                 \"type\": \"text\",
-                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n❌ テスト失敗！\n\nコミット: ${COMMIT_MSG}\n\nGitHub Actionsのログを確認してね！\nhttps://github.com/akiyamanx/cocomi-postman/actions\"
+                \"text\": \"📮 COCOMI Postman テスト審査結果\n\n❌ テスト失敗！\n\nコミット: ${COMMIT_MSG}\n\nGitHub Actionsのログを確認してね！\n\n📎 https://github.com/akiyamanx/cocomi-postman/actions\"
               }]
             }"
           echo "📱 LINE通知送信完了"
