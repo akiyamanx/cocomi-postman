@@ -218,16 +218,14 @@ set_github_secrets() {
     info "対象リポジトリ: $repo_name"
 
     # LINE_CHANNEL_ACCESS_TOKEN を設定
-    echo "$LINE_TOKEN" | gh secret set LINE_CHANNEL_ACCESS_TOKEN --repo "$repo_name"
-    if [ $? -eq 0 ]; then
+    if echo "$LINE_TOKEN" | gh secret set LINE_CHANNEL_ACCESS_TOKEN --repo "$repo_name"; then
         success "SECRET設定完了: LINE_CHANNEL_ACCESS_TOKEN"
     else
         die "LINE_CHANNEL_ACCESS_TOKEN の設定に失敗しました"
     fi
 
     # LINE_USER_ID を設定
-    echo "$LINE_USER_ID" | gh secret set LINE_USER_ID --repo "$repo_name"
-    if [ $? -eq 0 ]; then
+    if echo "$LINE_USER_ID" | gh secret set LINE_USER_ID --repo "$repo_name"; then
         success "SECRET設定完了: LINE_USER_ID"
     else
         die "LINE_USER_ID の設定に失敗しました"
