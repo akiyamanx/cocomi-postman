@@ -4,6 +4,7 @@
 # 指示書の ### Step N/M 記法を認識し、1ステップずつ順番に実行する
 # 各ステップ完了後にgit push→CI確認→CI合格で自動的に次のステップへ
 # v2.0 追加 2026-02-22 - Phase E: Step-by-Step Execution
+# v2.0.1 修正 2026-02-22 - ShellCheck SC2086修正（算術展開・変数のダブルクォート追加）
 
 # === ステップ記法判定 ===
 # 指示書に ### Step で始まる行が2つ以上あればステップ付き指示書
@@ -35,7 +36,7 @@ parse_steps() {
 
     local header=""
     if [ -n "$first_step_line" ] && [ "$first_step_line" -gt 1 ]; then
-        header=$(head -$((first_step_line - 1)) "$mission_file")
+        header=$(head -"$((first_step_line - 1))" "$mission_file")
     fi
 
     # ステップの開始行番号を全て取得
@@ -50,16 +51,16 @@ parse_steps() {
 
     # 各ステップを分割してファイルに保存
     local i
-    for i in $(seq 0 $((total_steps - 1))); do
-        local start=${step_lines[$i]}
+    for i in $(seq 0 "$((total_steps - 1))"); do
+        local start="${step_lines[$i]}"
         local end
-        if [ $i -lt $((total_steps - 1)) ]; then
-            end=$((step_lines[$((i + 1))] - 1))
+        if [ "$i" -lt "$((total_steps - 1))" ]; then
+            end="$((step_lines[$((i + 1))] - 1))"
         else
-            end=$total_lines
+            end="$total_lines"
         fi
 
-        local step_num=$((i + 1))
+        local step_num="$((i + 1))"
         local step_file="$temp_dir/step-${step_num}.md"
 
         # 共通ヘッダー + このステップの内容
@@ -119,8 +120,8 @@ wait_for_ci() {
     # push直後のCI起動を待つため最初に15秒待機
     sleep 15
 
-    while [ $attempt -lt $max_attempts ]; do
-        attempt=$((attempt + 1))
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        attempt="$((attempt + 1))"
 
         # gh CLIでワークフロー実行結果を取得
         local run_info
@@ -144,7 +145,7 @@ wait_for_ci() {
         fi
 
         echo -e "  ${YELLOW}  ⏳ CI実行中... (${attempt}/${max_attempts})${NC}"
-        sleep $wait_interval
+        sleep "$wait_interval"
     done
 
     echo -e "  ${RED}⚠️ CIタイムアウト（10分経過）${NC}"
@@ -211,7 +212,7 @@ run_step_mission() {
         run_with_retry "$step_file" "${MISSION_NAME}-step${step_num}" "$LOG_FILE" "$CURRENT_REPO_PATH"
         local EXIT_CODE=$?
 
-        if [ $EXIT_CODE -ne 0 ]; then
+        if [ "$EXIT_CODE" -ne 0 ]; then
             echo -e "  ${RED}❌ Step ${step_num}/${TOTAL_STEPS} 実行失敗${NC}"
             echo "--- Step ${step_num} 実行失敗: $(date) ---" >> "$LOG_FILE"
 
