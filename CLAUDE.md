@@ -39,3 +39,4 @@ post.sh はスマホで動くので軽量に保つ
 postman.sh は機能が増えたらcore/に分割する
 テンプレートは templates/ 以下で管理
 git操作のエラーハンドリングを必ず入れる
+<!-- Step Execution v2.0 test - Step 2 completed -->
