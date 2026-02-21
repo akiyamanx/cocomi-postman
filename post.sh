@@ -6,6 +6,7 @@
 # v1.0 作成 2026-02-18
 # v1.2 修正 2026-02-19 - config.json動的参照に変更
 # v1.4 修正 2026-02-19 - ShellCheck対応
+# v1.6 修正 2026-02-21 - git push競合対策（pull --rebase+リトライ追加）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -144,14 +145,28 @@ send_mission() {
     git add "missions/$CURRENT_PROJECT/$FILENAME"
     git commit -m "📮 新規ミッション: $CURRENT_PROJECT/$FILENAME" > /dev/null 2>&1
 
+    # v1.6追加 - push前にリモート同期（タブレットとの競合防止）
+    echo -e "  ${YELLOW}🔄 リモートと同期中...${NC}"
+    git pull --rebase origin main > /dev/null 2>&1
+
+    # v1.6修正 - リトライ付きpush（競合対策）
     if git push origin main > /dev/null 2>&1; then
         echo -e "${GREEN}  ✅ ファイル作成: ${FILENAME}${NC}"
         echo -e "${GREEN}  ✅ git push 完了${NC}"
         echo -e "${GREEN}  📮 タブレット支店に届けました！${NC}"
     else
-        echo -e "${YELLOW}  ✅ ファイル作成: ${FILENAME}${NC}"
-        echo -e "${RED}  ⚠️ git pushに失敗。後で手動pushしてね${NC}"
-        echo "  コマンド: cd ~/cocomi-postman && git push"
+        # 1回だけリトライ（タブレットがpushした直後の可能性）
+        echo -e "  ${YELLOW}🔄 再同期中...（リトライ1回目）${NC}"
+        git pull --rebase origin main > /dev/null 2>&1
+        if git push origin main > /dev/null 2>&1; then
+            echo -e "${GREEN}  ✅ ファイル作成: ${FILENAME}${NC}"
+            echo -e "${GREEN}  ✅ git push 完了（リトライで成功）${NC}"
+            echo -e "${GREEN}  📮 タブレット支店に届けました！${NC}"
+        else
+            echo -e "${YELLOW}  ✅ ファイル作成: ${FILENAME}${NC}"
+            echo -e "${RED}  ⚠️ git pushに失敗。後で手動pushしてね${NC}"
+            echo "  コマンド: cd ~/cocomi-postman && git pull --rebase && git push"
+        fi
     fi
 
     echo ""
@@ -388,10 +403,24 @@ EOF
     cd "$POSTMAN_DIR" || return
     git add "ideas/$idea_dir/IDEA-${TIMESTAMP}.md"
     git commit -m "💡 アイデア追加: $idea_dir" > /dev/null 2>&1
-    git push origin main > /dev/null 2>&1
-
-    echo ""
-    echo -e "${GREEN}  ✅ アイデア保存＆配達完了！${NC}"
+    # v1.6追加 - push前にリモート同期（競合防止）
+    git pull --rebase origin main > /dev/null 2>&1
+    if git push origin main > /dev/null 2>&1; then
+        echo ""
+        echo -e "${GREEN}  ✅ アイデア保存＆配達完了！${NC}"
+    else
+        # v1.6追加 - 1回リトライ
+        git pull --rebase origin main > /dev/null 2>&1
+        if git push origin main > /dev/null 2>&1; then
+            echo ""
+            echo -e "${GREEN}  ✅ アイデア保存＆配達完了！（リトライ成功）${NC}"
+        else
+            echo ""
+            echo -e "${YELLOW}  ✅ アイデア保存完了！${NC}"
+            echo -e "${RED}  ⚠️ git pushに失敗。後で手動pushしてね${NC}"
+            echo "  コマンド: cd ~/cocomi-postman && git pull --rebase && git push"
+        fi
+    fi
     echo -e "  📂 保存先: ideas/${idea_dir}/"
     echo ""
     echo "  Enter でメニューに戻る"

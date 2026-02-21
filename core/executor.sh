@@ -7,6 +7,7 @@
 # v1.3 追加 2026-02-19 - LINE通知呼び出し追加
 # v1.4 修正 2026-02-19 - ShellCheck対応
 # v1.5 修正 2026-02-20 - Phase C: リトライ機構統合（retry.sh連携）
+# v1.6 修正 2026-02-21 - git push競合対策（pull --rebase+リトライ追加）
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === プロジェクトリポジトリのgit push（Termuxから直接実行） ===
@@ -19,12 +20,21 @@ git_push_project() {
         git add -A
         if ! git diff --cached --quiet 2>/dev/null; then
             git commit -m "$COMMIT_MSG" > /dev/null 2>&1
+            # v1.6追加 - push前にリモート同期（スマホとの競合防止）
+            git pull --rebase origin main > /dev/null 2>&1
             if git push origin main > /dev/null 2>&1; then
                 echo -e "  ${GREEN}📮 プロジェクトをgit push完了${NC}"
                 return 0
             else
-                echo -e "  ${RED}⚠️ プロジェクトのgit pushに失敗${NC}"
-                return 1
+                # v1.6追加 - 1回リトライ
+                git pull --rebase origin main > /dev/null 2>&1
+                if git push origin main > /dev/null 2>&1; then
+                    echo -e "  ${GREEN}📮 プロジェクトをgit push完了（リトライ成功）${NC}"
+                    return 0
+                else
+                    echo -e "  ${RED}⚠️ プロジェクトのgit pushに失敗${NC}"
+                    return 1
+                fi
             fi
         else
             echo -e "  ${YELLOW}📝 プロジェクトに変更なし（push不要）${NC}"
@@ -40,10 +50,18 @@ git_push_postman() {
     git add -A
     if ! git diff --cached --quiet 2>/dev/null; then
         git commit -m "$COMMIT_MSG" > /dev/null 2>&1
+        # v1.6追加 - push前にリモート同期（スマホとの競合防止）
+        git pull --rebase origin main > /dev/null 2>&1
         if git push origin main > /dev/null 2>&1; then
             echo -e "  ${GREEN}📮 レポートをスマホ支店に送りました${NC}"
         else
-            echo -e "  ${RED}⚠️ レポートのgit pushに失敗${NC}"
+            # v1.6追加 - 1回リトライ
+            git pull --rebase origin main > /dev/null 2>&1
+            if git push origin main > /dev/null 2>&1; then
+                echo -e "  ${GREEN}📮 レポートをスマホ支店に送りました（リトライ成功）${NC}"
+            else
+                echo -e "  ${RED}⚠️ レポートのgit pushに失敗${NC}"
+            fi
         fi
     fi
 }
