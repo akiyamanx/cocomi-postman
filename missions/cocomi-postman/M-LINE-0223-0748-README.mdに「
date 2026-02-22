@@ -1,0 +1,6 @@
+# M-LINE-0223-0748: README.mdに「## カプセル保管庫」セクションを追加。capsules/フォルダにLINEか
+## プロジェクト: cocomi-postman
+## 送信元: LINE
+## 日時: 2026-02-23T07:48:11.982+09:00
+
+README.mdに「## カプセル保管庫」セクションを追加。capsules/フォルダにLINEからファイルを送信するとdaily/master/plans/に自動振り分けされる機能の説明を書いて。
