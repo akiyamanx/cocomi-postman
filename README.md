@@ -39,6 +39,22 @@ cocomi-postman/
 └── auto-mode/              ← 自動モード用
 ```
 
+## カプセル保管庫（dev-capsules/）
+
+開発の途中成果やDIFF（差分）を「カプセル」として保管する仕組み。
+セッションをまたいで作業を引き継ぐための、COCOMI Postman独自のチェックポイント機能。
+
+**役割:**
+- 開発中のDIFF（差分データ）を安全に保管
+- プロジェクトごとの作業スナップショットを管理
+- スマホ支店↔タブレット支店間の作業引き継ぎ
+- 失敗時のロールバックポイントとして活用
+
+**運用フロー:**
+1. Claude Codeが作業中にカプセル（DIFF_DEV）を生成
+2. `dev-capsules/` に保管
+3. 次回セッションや別デバイスから復元・適用可能
+
 ## 開発ロードマップ
 
 - **Phase A**: 基盤づくり（CLAUDE.md + テンプレート） ← 今ここ
@@ -51,7 +67,5 @@ cocomi-postman/
 
 *「無いものは作る。しかも、世の中のどこにもないものを。」*
 *COCOMIファミリー 2026*
-# test
-# test
 <!-- Phase C: Retry + Report v1.5 tested -->
 <!-- Step Execution v2.0 test - Step 1 completed -->
