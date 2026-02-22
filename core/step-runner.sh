@@ -5,6 +5,7 @@
 # 各ステップ完了後にgit push→CI確認→CI合格で自動的に次のステップへ
 # v2.0 追加 2026-02-22 - Phase E: Step-by-Step Execution
 # v2.0.1 修正 2026-02-22 - ShellCheck SC2086修正（算術展開・変数のダブルクォート追加）
+# v2.0.2 修正 2026-02-23 - has_steps/wait_for_ci grep -c 整数判定バグ修正
 
 # === ステップ記法判定 ===
 # 指示書に ### Step で始まる行が2つ以上あればステップ付き指示書
@@ -13,7 +14,7 @@
 has_steps() {
     local mission_file="$1"
     local step_count
-    step_count=$(grep -c "^### Step [0-9]" "$mission_file" 2>/dev/null || echo "0")
+    step_count=$(grep -c "^### Step [0-9]" "$mission_file" 2>/dev/null ) || true; step_count=${step_count:-0})
     if [ "$step_count" -ge 2 ]; then
         return 0
     fi
@@ -105,7 +106,7 @@ wait_for_ci() {
 
     # CIワークフローが設定されているか確認
     local workflow_count
-    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"' || echo "0")
+    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"' ) || true; workflow_count=${workflow_count:-0})
     if [ "$workflow_count" -eq 0 ]; then
         echo -e "  ${YELLOW}⚠️ GitHub Actionsワークフローなし。CI確認をスキップします${NC}"
         return 0
