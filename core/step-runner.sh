@@ -13,8 +13,8 @@
 # 戻り値: 0 = ステップあり, 1 = ステップなし
 has_steps() {
     local mission_file="$1"
-    local step_count
-    step_count=$(grep -c "^### Step [0-9]" "$mission_file" 2>/dev/null ) || true; step_count=${step_count:-0})
+    step_count=$(grep -c "^### Step [0-9]" "$mission_file" 2>/dev/null) || true
+    step_count="${step_count:-0}"
     if [ "$step_count" -ge 2 ]; then
         return 0
     fi
@@ -106,13 +106,14 @@ wait_for_ci() {
 
     # CIワークフローが設定されているか確認
     local workflow_count
-    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"' ) || true; workflow_count=${workflow_count:-0})
+    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"' ) || true;
+    workflow_count=${workflow_count:-0}"
     if [ "$workflow_count" -eq 0 ]; then
         echo -e "  ${YELLOW}⚠️ GitHub Actionsワークフローなし。CI確認をスキップします${NC}"
         return 0
     fi
 
-    echo -e "  ${YELLOW}⏳ CI結果を待機中... (最大10分)${NC}"
+    echo -e "  ${YELLOW}⏳ CI結果を待機中... （最大10分）${NC}"
 
     local max_attempts=20
     local wait_interval=30
