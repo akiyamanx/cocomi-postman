@@ -1,28 +1,42 @@
 {
-  "_comment": "このファイルをconfig.jsonにコピーして、実際の値を入れてください",
-  "api_level": 1,
+  "_comment": "COCOMI Postman 設定ファイル v2.0",
+  "_usage": "このファイルをconfig.jsonにコピーして、実際の値を入れてください",
+  "_warning": "config.jsonは.gitignoreで除外済み。GitHubにpushしないこと！",
+
+  "default_project": "genba-pro",
+
   "projects": {
     "genba-pro": {
       "name": "現場Pro設備くん",
       "repo": "akiyamanx/GenbaProSetsubikunN",
-      "local_path": "~/GenbaProSetsubikunN"
+      "local_path": "$HOME/GenbaProSetsubikunN"
     },
     "culo-chan": {
       "name": "CULOchanKAIKEIpro",
       "repo": "akiyamanx/CULOchanKAIKEIpro",
-      "local_path": "~/CULOchanKAIKEIpro"
+      "local_path": "$HOME/CULOchanKAIKEIpro"
+    },
+    "maintenance-map": {
+      "name": "メンテナンスマップ",
+      "repo": "akiyamanx/maintenance-map-ap",
+      "local_path": "$HOME/maintenance-map-ap"
+    },
+    "cocomi-postman": {
+      "name": "COCOMI Postman",
+      "repo": "akiyamanx/cocomi-postman",
+      "local_path": "$HOME/cocomi-postman"
     }
   },
-  "check_interval_minutes": 5,
-  "max_retries": 3,
-  "apis": {
-    "github": {
-      "enabled": false,
-      "token": "ここにGitHubトークンを入れる"
-    },
-    "claude": {
-      "enabled": false,
-      "api_key": "ここにClaude APIキーを入れる"
+
+  "line": {
+    "enabled": true,
+    "channel_access_token": "ここにLINE Messaging APIのチャネルアクセストークンを入れる",
+    "user_id": "ここにアキヤのLINEユーザーIDを入れる",
+    "notify_on": {
+      "mission_complete": true,
+      "mission_error": true
     }
-  }
+  },
+
+  "check_interval_minutes": 5
 }
