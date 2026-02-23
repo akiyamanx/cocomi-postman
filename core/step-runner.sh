@@ -6,6 +6,7 @@
 # v2.0 追加 2026-02-22 - Phase E: Step-by-Step Execution
 # v2.0.1 修正 2026-02-22 - ShellCheck SC2086修正（算術展開・変数のダブルクォート追加）
 # v2.0.2 修正 2026-02-23 - has_steps/wait_for_ci grep -c 整数判定バグ修正
+# v2.1 改修 2026-02-24 - 全体コンテキスト注入: Claude Codeが毎回全体を把握してからステップ実行
 
 # === ステップ記法判定 ===
 # 指示書に ### Step で始まる行が2つ以上あればステップ付き指示書
@@ -21,8 +22,19 @@ has_steps() {
     return 1
 }
 
-# === ステップ分割パーサー ===
+# === ステップ見出し一覧を抽出 ===
+# 全ステップの ### Step N/M 行を一覧で返す（コンテキスト注入用）
+# 引数: $1 = 指示書ファイルパス
+# 出力: 各行に "Step N/M: タイトル" 形式
+extract_step_titles() {
+    local mission_file="$1"
+    grep "^### Step [0-9]" "$mission_file" 2>/dev/null
+}
+
+# === ステップ分割パーサー（v2.1 全体コンテキスト注入対応） ===
 # 指示書を ### Step N/M の区切りでステップごとのファイルに分割する
+# v2.1追加: 各ステップファイルに「全体指示書パス＋進捗情報」を自動注入
+# Claude Codeはこの情報を見て、全体指示書を読んでから作業に入る
 # 引数: $1 = 指示書ファイルパス, $2 = 一時ディレクトリパス
 # 出力: 一時ディレクトリに step-1.md, step-2.md, ... を生成
 # 戻り値: ステップ数（標準出力にecho）
@@ -30,6 +42,9 @@ parse_steps() {
     local mission_file="$1"
     local temp_dir="$2"
     mkdir -p "$temp_dir"
+
+    # v2.1追加 - 全体指示書をコピー（Claude Codeが参照できるように）
+    cp "$mission_file" "$temp_dir/full-instruction.md"
 
     # 共通ヘッダー（最初の ### Step より前の部分）を抽出
     local first_step_line
@@ -50,6 +65,10 @@ parse_steps() {
     local total_lines
     total_lines=$(wc -l < "$mission_file")
 
+    # v2.1追加 - 全ステップの見出し一覧を取得
+    local step_titles
+    step_titles=$(extract_step_titles "$mission_file")
+
     # 各ステップを分割してファイルに保存
     local i
     for i in $(seq 0 "$((total_steps - 1))"); do
@@ -64,7 +83,20 @@ parse_steps() {
         local step_num="$((i + 1))"
         local step_file="$temp_dir/step-${step_num}.md"
 
-        # 共通ヘッダー + このステップの内容
+        # v2.1追加 - 完了済みステップのリストを生成
+        local completed_list=""
+        if [ "$step_num" -gt 1 ]; then
+            local j
+            for j in $(seq 1 "$((step_num - 1))"); do
+                completed_list="${completed_list}  - Step ${j}: ✅ 完了済み（git push＆CI合格済み）
+"
+            done
+        else
+            completed_list="  - なし（これが最初のステップです）
+"
+        fi
+
+        # 共通ヘッダー + コンテキスト情報 + このステップの内容
         {
             if [ -n "$header" ]; then
                 echo "$header"
@@ -72,6 +104,33 @@ parse_steps() {
                 echo "---"
                 echo ""
             fi
+
+            # v2.1追加 - 全体コンテキスト注入ブロック
+            cat << CONTEXT_EOF
+## ⚠️ 作業前に必ず読んでください（自動生成・コンテキスト情報）
+
+この指示書はステップ分割されており、あなたは今 **Step ${step_num}/${total_steps}** を担当します。
+
+### 🔍 全体指示書を確認してください
+**全体指示書のパス:** \`${temp_dir}/full-instruction.md\`
+
+**必ず全体指示書を最初に読んで**、プロジェクト全体の目標・アーキテクチャ・ファイル構成を把握してから、今回のステップの作業に入ってください。
+
+### 📋 全ステップ一覧
+${step_titles}
+
+### ✅ 完了済みステップ
+${completed_list}
+### 📌 今回の作業
+**→ Step ${step_num}/${total_steps} を実行してください**
+
+前のステップの成果物は既にリポジトリに反映済みです。リポジトリの現在の状態を確認してから作業を開始してください。
+
+---
+
+CONTEXT_EOF
+
+            # このステップの実際の内容
             sed -n "${start},${end}p" "$mission_file"
         } > "$step_file"
     done
@@ -174,13 +233,13 @@ run_step_mission() {
         echo "ミッション: $MISSION_NAME"
     } > "$LOG_FILE"
 
-    # ① ステップ分割
+    # ① ステップ分割（v2.1: 全体コンテキスト注入付き）
     local TEMP_DIR="$POSTMAN_DIR/.step-temp/${MISSION_NAME}"
     rm -rf "$TEMP_DIR"
     local TOTAL_STEPS
     TOTAL_STEPS=$(parse_steps "$MISSION_FILE" "$TEMP_DIR")
 
-    echo -e "  ${CYAN}📋 ${TOTAL_STEPS}ステップに分割しました${NC}"
+    echo -e "  ${CYAN}📋 ${TOTAL_STEPS}ステップに分割しました（全体コンテキスト注入済み）${NC}"
     echo "ステップ数: $TOTAL_STEPS" >> "$LOG_FILE"
 
     # ② ステップを順番に実行
@@ -291,7 +350,7 @@ run_step_mission() {
 - **Project:** ${CURRENT_PROJECT_NAME}
 - **Total steps:** ${TOTAL_STEPS}
 - **Completed steps:** ${completed_steps}/${TOTAL_STEPS}
-- **Execution mode:** step-by-step with CI gate
+- **Execution mode:** step-by-step with CI gate + full context injection (v2.1)
 - **Timestamp:** $(date '+%Y-%m-%dT%H:%M:%S')
 
 ### Step Results
@@ -326,7 +385,8 @@ EOF
 - **Project:** ${CURRENT_PROJECT_NAME}
 - **Failed at:** Step $((completed_steps + 1))/${TOTAL_STEPS}
 - **Completed steps:** ${completed_steps}/${TOTAL_STEPS}
-- **Timestamp:** $(date '+%Y-%m-%dT%H:%M:%S')
+- **Execution mode:** step-by-step with full context injection (v2.1)
+- **Timestamp:** $(date -Iseconds 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S')
 
 ### Claude Code Self-Analysis
 ${ANALYSIS}
