@@ -106,8 +106,8 @@ wait_for_ci() {
 
     # CIワークフローが設定されているか確認
     local workflow_count
-    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"' ) || true;
-    workflow_count=${workflow_count:-0}"
+    workflow_count=$(gh workflow list --repo "$repo_name" --json name 2>/dev/null | grep -c '"name"') || true
+    workflow_count="${workflow_count:-0}"
     if [ "$workflow_count" -eq 0 ]; then
         echo -e "  ${YELLOW}⚠️ GitHub Actionsワークフローなし。CI確認をスキップします${NC}"
         return 0
@@ -146,7 +146,7 @@ wait_for_ci() {
             fi
         fi
 
-        echo -e "  ${YELLOW}  ⏳ CI実行中... (${attempt}/${max_attempts})${NC}"
+        echo -e "  ${YELLOW}  ⏳ CI実行中... （${attempt}/${max_attempts}）${NC}"
         sleep "$wait_interval"
     done
 
