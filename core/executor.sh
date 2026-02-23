@@ -201,6 +201,9 @@ auto_mode() {
 
     echo ""
     echo -e "${GREEN}  🌙 自動モード起動！（${INTERVAL}秒間隔）${NC}"
+    # v2.2.2追加 - バックグラウンド維持のためwake lock自動取得
+    termux-wake-lock 2>/dev/null
+    echo -e "  ${GREEN}🔒 Wake Lock取得（スリープ中も動作継続）${NC}"
     echo -e "  Ctrl+C で終了"
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
