@@ -7,6 +7,7 @@
 # v2.0.1 修正 2026-02-22 - ShellCheck SC2086修正（算術展開・変数のダブルクォート追加）
 # v2.0.2 修正 2026-02-23 - has_steps/wait_for_ci grep -c 整数判定バグ修正
 # v2.1 改修 2026-02-24 - 全体コンテキスト注入: Claude Codeが毎回全体を把握してからステップ実行
+# v2.2 修正 2026-02-27 - push不要（変更なし）時のCI待ちスキップ対応
 
 # === ステップ記法判定 ===
 # 指示書に ### Step で始まる行が2つ以上あればステップ付き指示書
@@ -291,9 +292,13 @@ run_step_mission() {
 
         # git push
         git_push_project "$CURRENT_REPO_PATH" "📮 ${MISSION_NAME} Step ${step_num}/${TOTAL_STEPS} by COCOMI Postman"
+        local push_result=$?
 
-        # CI結果を待つ
-        if ! wait_for_ci "$CURRENT_REPO_PATH"; then
+        # v2.2修正 - push不要（変更なし）の場合はCI待ちをスキップ
+        if [ "$push_result" -eq 2 ]; then
+            echo -e "  ${YELLOW}⏭️ 変更なしのためCI待ちスキップ${NC}"
+            echo "--- Step ${step_num} 変更なし・CI待ちスキップ: $(date) ---" >> "$LOG_FILE"
+        elif ! wait_for_ci "$CURRENT_REPO_PATH"; then
             echo -e "  ${RED}❌ Step ${step_num}/${TOTAL_STEPS} CI不合格！停止します${NC}"
             echo "--- Step ${step_num} CI不合格: $(date) ---" >> "$LOG_FILE"
 
@@ -307,7 +312,7 @@ run_step_mission() {
         fi
 
         completed_steps=$step_num
-        echo "--- Step ${step_num} CI合格: $(date) ---" >> "$LOG_FILE"
+        echo "--- Step ${step_num} 完了: $(date) ---" >> "$LOG_FILE"
 
         # LINE通知（ステップ完了、ただし最終ステップは後でまとめて通知）
         if [ "$step_num" -lt "$TOTAL_STEPS" ]; then
