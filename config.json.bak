@@ -1,0 +1,73 @@
+{
+  "_comment": "COCOMI Postman 全体設定 v1.1 - パス動的解決＋postman自身登録",
+  "_updated": "2026-02-26",
+  "version": "1.1",
+  "postman_repo": "cocomi-postman",
+  "github_user": "akiyamanx",
+  "default_project": "genba-pro",
+  "projects": {
+    "genba-pro": {
+      "name": "現場Pro設備くん",
+      "repo": "GenbaProSetsubikuN",
+      "local_path": "$HOME/GenbaProSetsubikunN",
+      "github_url": "https://github.com/akiyamanx/GenbaProSetsubikuN",
+      "subfolder": "",
+      "status": "active",
+      "current_phase": "Phase8",
+      "description": "建設現場管理アプリ（工程・写真・日報）",
+      "current_version": "Phase8"
+    },
+    "culo-chan": {
+      "name": "CULOchanKAIKEIpro",
+      "repo": "CULOchanKAIKEIpro",
+      "local_path": "$HOME/CULOchanKAIKEIpro",
+      "github_url": "https://github.com/akiyamanx/CULOchanKAIKEIpro",
+      "subfolder": "",
+      "status": "active",
+      "current_version": "v0.97",
+      "description": "会計・見積書作成アプリ"
+    },
+    "maintenance-map": {
+      "name": "メンテナンスマップ",
+      "repo": "maintenance-map-ap",
+      "local_path": "$HOME/maintenance-map-ap",
+      "github_url": "https://github.com/akiyamanx/maintenance-map-ap",
+      "subfolder": "",
+      "status": "active",
+      "current_version": "v2.3",
+      "description": "ウォーターサーバーメンテナンス先の地図管理"
+    },
+    "cocomi-postman": {
+      "name": "COCOMI Postman",
+      "repo": "cocomi-postman",
+      "local_path": "$HOME/cocomi-postman",
+      "github_url": "https://github.com/akiyamanx/cocomi-postman",
+      "subfolder": "",
+      "status": "active",
+      "description": "COCOMIファミリー開発パイプライン"
+    }
+  },
+  "allowed_tools": "Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(rm *),Bash(chmod *),Bash(node *),Bash(npm *),Bash(npx *),Bash(python *),Bash(sed *),Bash(awk *),Bash(sort *),Bash(curl *),Bash(diff *),Bash(stat *)",
+  "auto_mode": {
+    "check_interval_seconds": 60,
+    "default_interval": "1min",
+    "max_retries": 3,
+    "concurrent_missions": 1
+  },
+  "api_level": 1,
+  "safety": {
+    "auto_fix_enabled": false,
+    "fallback_to_git_only": true
+  },
+  "line": {
+    "_comment": "v1.3追加 - LINE Messaging API通知設定",
+    "enabled": true,
+    "channel_access_token": "IXnk0YPRI3mRSGvQyo+XqrxeRUQe6Z/KScISHEiDcmuWzEtd5b2Xop/Av95VjMyLs/wVbDWFYywBq8kLkqxqQPwRb3ndjtNchCQHWegZdBhgGhm4aI3qkewn+PD/iznRsttDlKLBHLcT2Lb4H9mBMwdB04t89/1O/w1cDnyilFU=",
+    "user_id": "U3a4300ca869ca95e64f3f25c57cee5cd",
+    "notify_on": {
+      "mission_complete": true,
+      "mission_error": true,
+      "auto_mode_summary": false
+    }
+  }
+}
