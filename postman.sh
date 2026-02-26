@@ -7,6 +7,7 @@
 # v1.3 追加 2026-02-19 - LINE Messaging API通知機能
 # v1.4 修正 2026-02-19 - ShellCheck対応＋execute_missionリファクタリング
 # v2.0 追加 2026-02-22 - ステップ実行エンジン読み込み
+# v2.1 追加 2026-02-26 - ログ・履歴機能（core/logger.sh連携）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -414,6 +415,12 @@ if [ -f "$POSTMAN_DIR/core/step-runner.sh" ]; then
     source "$POSTMAN_DIR/core/step-runner.sh"
 fi
 
+# v2.1追加 - ログ・履歴モジュール読み込み
+# shellcheck source=core/logger.sh
+if [ -f "$POSTMAN_DIR/core/logger.sh" ]; then
+    source "$POSTMAN_DIR/core/logger.sh"
+fi
+
 # === プレースホルダー ===
 coming_soon() {
     echo ""
@@ -435,7 +442,7 @@ while true; do
         4) show_dashboard ;;
         5) direct_claude ;;
         6) switch_project ;;
-        7) coming_soon "ログ・履歴" ;;
+        7) show_logs ;;
         8) coming_soon "プロジェクト管理" ;;
         9) coming_soon "設定" ;;
         0) auto_mode ;;
