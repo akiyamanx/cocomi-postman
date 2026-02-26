@@ -8,6 +8,7 @@
 # v1.4 修正 2026-02-19 - ShellCheck対応＋execute_missionリファクタリング
 # v2.0 追加 2026-02-22 - ステップ実行エンジン読み込み
 # v2.1 追加 2026-02-26 - ログ・履歴機能（core/logger.sh連携）
+# v2.2 追加 2026-02-26 - プロジェクト管理機能（core/project-manager.sh + config-helper.py連携）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -421,6 +422,12 @@ if [ -f "$POSTMAN_DIR/core/logger.sh" ]; then
     source "$POSTMAN_DIR/core/logger.sh"
 fi
 
+# v2.2追加 - プロジェクト管理モジュール読み込み
+# shellcheck source=core/project-manager.sh
+if [ -f "$POSTMAN_DIR/core/project-manager.sh" ]; then
+    source "$POSTMAN_DIR/core/project-manager.sh"
+fi
+
 # === プレースホルダー ===
 coming_soon() {
     echo ""
@@ -443,7 +450,7 @@ while true; do
         5) direct_claude ;;
         6) switch_project ;;
         7) show_logs ;;
-        8) coming_soon "プロジェクト管理" ;;
+        8) manage_projects ;;
         9) coming_soon "設定" ;;
         0) auto_mode ;;
         q|Q)
