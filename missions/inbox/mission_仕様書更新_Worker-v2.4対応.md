@@ -1,6 +1,6 @@
 <!-- dest: missions/inbox -->
 <!-- project: cocomi-postman -->
-<!-- mission: 仕様書・取説をWorker v2.4対応で更新 -->
+<!-- mission: cocomi-postman -->
 
 # 📋 ミッション指示書: COCOMI Postman 仕様書・取説更新
 
