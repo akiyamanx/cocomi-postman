@@ -186,14 +186,49 @@ _show_entries_with_detail() {
         return
     fi
 
-    local index=1
+    # v1.0修正 - サブシェル問題回避のため配列に先に格納
     local filepaths=()
+    local display_lines=()
+    local index=1
     while IFS= read -r entry; do
-        echo -n "  ${GREEN}${index}${NC}. "
-        _format_entry "$entry"
         filepaths+=("$(echo "$entry" | cut -d'|' -f5)")
+        display_lines+=("$entry")
         index=$((index + 1))
     done <<< "$entries"
+
+    # v1.0修正 - echo -e で番号の色を正しく表示
+    for i in "${!display_lines[@]}"; do
+        local num=$((i + 1))
+        local entry="${display_lines[$i]}"
+        local timestamp entry_type proj name
+        timestamp=$(echo "$entry" | cut -d'|' -f1)
+        entry_type=$(echo "$entry" | cut -d'|' -f2)
+        proj=$(echo "$entry" | cut -d'|' -f3)
+        name=$(echo "$entry" | cut -d'|' -f4)
+
+        # 日付変換
+        local dd=""
+        if [ ${#timestamp} -ge 13 ]; then
+            dd="${timestamp:4:2}/${timestamp:6:2} ${timestamp:9:2}:${timestamp:11:2}"
+        else
+            dd="$timestamp"
+        fi
+
+        # アイコン
+        local icon=""
+        case "$entry_type" in
+            success)     icon="✅" ;;
+            error)       icon="❌" ;;
+            rejected)    icon="🛡️" ;;
+            unvalidated) icon="📥" ;;
+            log)         icon="📝" ;;
+        esac
+
+        local pdisp=""
+        [ "$proj" != "---" ] && pdisp="[${proj}] "
+
+        echo -e "  ${GREEN}${num}${NC}. ${dd} ${icon} ${pdisp}${name}"
+    done
 
     echo ""
     echo "  番号で詳細表示 / Enter で戻る"
