@@ -7,6 +7,7 @@
 # v1.2 修正 2026-02-19 - config.json動的参照に変更
 # v1.4 修正 2026-02-19 - ShellCheck対応
 # v1.6 修正 2026-02-21 - git push競合対策（pull --rebase+リトライ追加）
+# v1.7 修正 2026-03-25 - プロジェクトID検索バグ修正（grep対象を"ID": {に限定。MCP Phase2）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -48,12 +49,13 @@ init() {
 
 # === config.jsonからプロジェクト名を読み込む ===
 # v1.2修正 - ハードコードからconfig.json参照に変更
+# v1.7修正 - grep対象を"ID": {に限定（誤マッチ防止）
 load_project_name() {
     if [ ! -f "$CONFIG_FILE" ]; then
         CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
         return
     fi
-    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
     if [ -z "$CURRENT_PROJECT_NAME" ]; then
         CURRENT_PROJECT_NAME="$CURRENT_PROJECT"
     fi
@@ -240,6 +242,7 @@ check_reports() {
 
 # === 3. プロジェクト切替 ===
 # v1.2修正 - config.jsonから動的にプロジェクト一覧を表示
+# v1.7修正 - grep対象を"ID": {に限定
 switch_project() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -253,7 +256,7 @@ switch_project() {
     while IFS= read -r pid; do
         proj_ids+=("$pid")
         local pname
-        pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        pname=$(grep -A5 "\"$pid\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
         local mcount
         mcount=$(find "$POSTMAN_DIR/missions/$pid" -name "M-*.md" 2>/dev/null | wc -l)
         local mark=""
@@ -278,6 +281,7 @@ switch_project() {
 }
 
 # === 4. ダッシュボード ===
+# v1.7修正 - grep対象を"ID": {に限定
 show_dashboard() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -294,7 +298,7 @@ show_dashboard() {
     # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
     while IFS= read -r proj; do
         local pname
-        pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        pname=$(grep -A5 "\"$proj\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
         local missions
         missions=$(find "$POSTMAN_DIR/missions/$proj" -name "M-*.md" 2>/dev/null | wc -l)
