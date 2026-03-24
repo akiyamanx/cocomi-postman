@@ -4,7 +4,8 @@
 # Claude Code実行失敗時の自動リトライ、--continue継続、自己分析レポート生成
 # v1.5 追加 2026-02-20 - Phase C: Retry + Continue + AI Self-Analysis
 # v1.6 修正 2026-03-25 - TMPDIR設定追加（Termux /tmp権限エラー回避）
-# v1.7 修正 2026-03-25 - allowedTools拡張（rm/mkdir/cp/mv/sed追加）
+# v1.7 修正 2026-03-25 - allowedTools拡張
+# v1.8 修正 2026-03-25 - claude呼び出し全箇所にTMPDIR前置（Node.jsプロセスへの確実な環境変数注入）
 
 # === グローバル変数（executor.shへの受け渡し用） ===
 RETRY_COUNT=0
@@ -45,13 +46,13 @@ run_with_retry() {
 
     # --- Step 1: 初回実行 ---
     echo "--- 初回実行開始: $(date) ---" >> "$LOG_FILE"
-    claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
+    TMPDIR=$HOME/tmp claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- 初回実行成功: $(date) ---" >> "$LOG_FILE"
         # v1.5追加 - 成功時も作業サマリーを取得
-        ANALYSIS=$(claude -p "Summarize what you just did:
+        ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -73,14 +74,14 @@ Report in English. Be concise." --continue 2>&1)
         sleep 5
 
         echo "--- リトライ ${i}/${MAX_RETRY} 実行開始: $(date) ---" >> "$LOG_FILE"
-        claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
+        TMPDIR=$HOME/tmp claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
         EXIT_CODE=$?
 
         if [ $EXIT_CODE -eq 0 ]; then
             echo "--- リトライ ${i} で成功: $(date) ---" >> "$LOG_FILE"
             echo -e "  ${GREEN}🔄 リトライ${i}回目で成功！${NC}"
             # v1.5追加 - 成功時も作業サマリーを取得
-            ANALYSIS=$(claude -p "Summarize what you just did:
+            ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -98,14 +99,14 @@ Report in English. Be concise." --continue 2>&1)
     CONTINUE_TRIED="true"
     echo -e "  ${YELLOW}🔄 --continue で継続試行中...${NC}"
     echo "--- --continue 試行開始: $(date) ---" >> "$LOG_FILE"
-    claude --continue >> "$LOG_FILE" 2>&1
+    TMPDIR=$HOME/tmp claude --continue >> "$LOG_FILE" 2>&1
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- --continue 成功: $(date) ---" >> "$LOG_FILE"
         echo -e "  ${GREEN}🔄 --continueで成功！${NC}"
         # v1.5追加 - 成功時も作業サマリーを取得
-        ANALYSIS=$(claude -p "Summarize what you just did:
+        ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -121,7 +122,7 @@ Report in English. Be concise." --continue 2>&1)
     # --- Step 4: 自己分析（Claude Codeに失敗原因を聞く） ---
     echo -e "  ${YELLOW}🔍 Claude Codeに失敗原因を分析させています...${NC}"
     echo "--- 自己分析開始: $(date) ---" >> "$LOG_FILE"
-    ANALYSIS=$(claude -p "The previous task failed. Analyze the failure:
+    ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "The previous task failed. Analyze the failure:
 - What was attempted
 - How far it progressed
 - Root cause of failure
