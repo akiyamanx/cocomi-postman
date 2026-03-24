@@ -10,7 +10,8 @@
 # v2.1 追加 2026-02-26 - ログ・履歴機能（core/logger.sh連携）
 # v2.2 追加 2026-02-26 - プロジェクト管理機能（core/project-manager.sh + config-helper.py連携）
 # v2.3 追加 2026-02-26 - 設定管理機能（core/settings.sh連携）
-# v2.4 修正 2026-03-25 - プロジェクトID検索バグ修正（MCP Phase2テスト。grep対象を"ID": {に限定し誤マッチ防止）
+# v2.4 修正 2026-03-25 - プロジェクトID検索バグ修正
+# v2.5 修正 2026-03-25 - init()にTMPDIR設定追加（Claude Code /tmp権限エラー根本対策）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -38,6 +39,11 @@ init() {
         exit 1
     fi
     cd "$POSTMAN_DIR" || exit 1
+
+    # v2.5追加 - Termux TMPDIR設定（Claude Codeの/tmp権限エラー根本対策）
+    # postman.sh起動時にシェルレベルで設定。retry.shのensure_tmpdirより前に確実に効く
+    export TMPDIR="$HOME/tmp"
+    mkdir -p "$TMPDIR"
 
     # デフォルトプロジェクト読み込み
     CURRENT_PROJECT=$(grep '"default_project"' "$CONFIG_FILE" 2>/dev/null | sed 's/.*: *"\(.*\)".*/\1/')
