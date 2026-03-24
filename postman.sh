@@ -10,6 +10,7 @@
 # v2.1 追加 2026-02-26 - ログ・履歴機能（core/logger.sh連携）
 # v2.2 追加 2026-02-26 - プロジェクト管理機能（core/project-manager.sh + config-helper.py連携）
 # v2.3 追加 2026-02-26 - 設定管理機能（core/settings.sh連携）
+# v2.4 修正 2026-03-25 - プロジェクトID検索バグ修正（MCP Phase2テスト。grep対象を"ID": {に限定し誤マッチ防止）
 
 # === 設定 ===
 POSTMAN_DIR="$HOME/cocomi-postman"
@@ -46,6 +47,7 @@ init() {
 
 # === config.jsonからプロジェクト情報を読み込む ===
 # v1.2修正 - ハードコードからconfig.json参照に変更
+# v2.4修正 - grep対象を"ID": {に限定（postman_repoキー等との誤マッチ防止）
 load_project_info() {
     if [ ! -f "$CONFIG_FILE" ]; then
         echo -e "${RED}❌ config.jsonが見つかりません${NC}"
@@ -55,12 +57,12 @@ load_project_info() {
         return
     fi
 
-    # config.jsonからプロジェクト名を取得
-    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    # config.jsonからプロジェクト名を取得（v2.4修正: ": {"で厳密マッチ）
+    CURRENT_PROJECT_NAME=$(grep -A5 "\"$CURRENT_PROJECT\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
     # config.jsonからローカルパスを取得（$HOMEを展開）
     local raw_path
-    raw_path=$(grep -A5 "\"$CURRENT_PROJECT\"" "$CONFIG_FILE" | grep '"local_path"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+    raw_path=$(grep -A5 "\"$CURRENT_PROJECT\": {" "$CONFIG_FILE" | grep '"local_path"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
     CURRENT_REPO_PATH="${raw_path//\$HOME/$HOME}"
 
     # 取得できなかった場合のフォールバック
@@ -289,6 +291,7 @@ manage_reports() {
 }
 
 # === 4. ダッシュボード ===
+# v2.4修正 - grep対象を"ID": {に限定
 show_dashboard() {
     echo ""
     echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -302,7 +305,7 @@ show_dashboard() {
     # v1.2修正 - config.jsonから動的にプロジェクト一覧を取得
     while IFS= read -r proj; do
         local pname
-        pname=$(grep -A5 "\"$proj\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        pname=$(grep -A5 "\"$proj\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
 
         local missions
         missions=$(find "$POSTMAN_DIR/missions/$proj" -name "M-*.md" 2>/dev/null | wc -l)
@@ -365,6 +368,7 @@ direct_claude() {
 
 # === 6. プロジェクト切替 ===
 # v1.2修正 - config.jsonから動的にプロジェクト一覧を表示
+# v2.4修正 - grep対象を"ID": {に限定
 switch_project() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -378,7 +382,7 @@ switch_project() {
     while IFS= read -r pid; do
         proj_ids+=("$pid")
         local pname
-        pname=$(grep -A5 "\"$pid\"" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
+        pname=$(grep -A5 "\"$pid\": {" "$CONFIG_FILE" | grep '"name"' | sed 's/.*: *"\(.*\)".*/\1/' | head -1)
         local mark=""
         [ "$CURRENT_PROJECT" = "$pid" ] && mark=" ⭐"
         echo -e "  ${GREEN}${i}${NC}. ${pname}${mark}"
