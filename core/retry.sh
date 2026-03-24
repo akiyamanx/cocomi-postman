@@ -3,11 +3,21 @@
 # このファイルは: COCOMI Postman リトライ＆自動継続エンジン
 # Claude Code実行失敗時の自動リトライ、--continue継続、自己分析レポート生成
 # v1.5 追加 2026-02-20 - Phase C: Retry + Continue + AI Self-Analysis
+# v1.6 修正 2026-03-25 - TMPDIR設定追加（Termux /tmp権限エラー回避）
 
 # === グローバル変数（executor.shへの受け渡し用） ===
 RETRY_COUNT=0
 CONTINUE_TRIED="false"
 ANALYSIS=""
+
+# === Termux環境のTMPDIR設定（/tmp権限エラー回避） ===
+# v1.6追加 - Claude Codeが/tmpに書き込めない問題の根本対策
+ensure_tmpdir() {
+    if [ -z "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
+        export TMPDIR="$HOME/tmp"
+        mkdir -p "$TMPDIR"
+    fi
+}
 
 # === Claude Code実行（リトライ機構付き） ===
 # 引数: $1=MISSION_FILE, $2=MISSION_NAME, $3=LOG_FILE, $4=CURRENT_REPO_PATH
@@ -24,6 +34,9 @@ run_with_retry() {
     RETRY_COUNT=0
     CONTINUE_TRIED="false"
     ANALYSIS=""
+
+    # v1.6追加 - TMPDIR設定（Claude Code実行前に必ず確認）
+    ensure_tmpdir
 
     # v1.5 リトライ用のallowedTools（executor.shと同じ）
     local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)"
