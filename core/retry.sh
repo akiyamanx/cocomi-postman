@@ -4,6 +4,7 @@
 # Claude Code実行失敗時の自動リトライ、--continue継続、自己分析レポート生成
 # v1.5 追加 2026-02-20 - Phase C: Retry + Continue + AI Self-Analysis
 # v1.6 修正 2026-03-25 - TMPDIR設定追加（Termux /tmp権限エラー回避）
+# v1.7 修正 2026-03-25 - allowedTools拡張（rm/mkdir/cp/mv/sed追加）
 
 # === グローバル変数（executor.shへの受け渡し用） ===
 RETRY_COUNT=0
@@ -38,8 +39,9 @@ run_with_retry() {
     # v1.6追加 - TMPDIR設定（Claude Code実行前に必ず確認）
     ensure_tmpdir
 
-    # v1.5 リトライ用のallowedTools（executor.shと同じ）
-    local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *)"
+    # v1.7更新 - allowedTools拡張（ファイル操作系コマンド追加）
+    # ※ git操作はPostman(executor.sh)が管理するため含めない（安全設計）
+    local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *),Bash(rm *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(sed *)"
 
     # --- Step 1: 初回実行 ---
     echo "--- 初回実行開始: $(date) ---" >> "$LOG_FILE"
