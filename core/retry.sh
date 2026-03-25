@@ -5,19 +5,36 @@
 # v1.5 追加 2026-02-20 - Phase C: Retry + Continue + AI Self-Analysis
 # v1.6 修正 2026-03-25 - TMPDIR設定追加（Termux /tmp権限エラー回避）
 # v1.7 修正 2026-03-25 - allowedTools拡張
-# v1.8 修正 2026-03-25 - claude呼び出し全箇所にTMPDIR前置（Node.jsプロセスへの確実な環境変数注入）
+# v1.8 修正 2026-03-25 - claude呼び出し全箇所にTMPDIR前置
+# v1.9 修正 2026-03-25 - proot方式で/tmp問題を根本解決（GitHub issue #18342回避策）
 
 # === グローバル変数（executor.shへの受け渡し用） ===
 RETRY_COUNT=0
 CONTINUE_TRIED="false"
 ANALYSIS=""
 
-# === Termux環境のTMPDIR設定（/tmp権限エラー回避） ===
-# v1.6追加 - Claude Codeが/tmpに書き込めない問題の根本対策
-ensure_tmpdir() {
-    if [ -z "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
-        export TMPDIR="$HOME/tmp"
-        mkdir -p "$TMPDIR"
+# === v1.9追加 - Claude Code実行コマンドの構築 ===
+# prootで/tmpをバインドマウントする方式（Claude CodeのNode.jsが/tmpをハードコード問題の根本解決）
+# 参考: https://github.com/anthropics/claude-code/issues/18342
+# 参考: https://utf9k.net/questions/claude-code-termux-tmp-tasks/
+CLAUDE_CMD=""
+
+# prootの存在確認 + /tmpバインドマウント設定
+# prootがあれば使う、なければTMPDIR前置にフォールバック
+setup_claude_cmd() {
+    # Termux環境のtmpディレクトリを確保
+    local TERMUX_TMP="${PREFIX:-/data/data/com.termux/files/usr}/tmp"
+    mkdir -p "$TERMUX_TMP" 2>/dev/null
+    mkdir -p "$HOME/tmp" 2>/dev/null
+
+    if command -v proot &>/dev/null; then
+        # proot方式: /tmpをTermuxのtmpにバインドマウント
+        CLAUDE_CMD="proot -b ${TERMUX_TMP}:/tmp claude"
+        echo -e "  ${GREEN}🔧 proot検出: /tmp→${TERMUX_TMP} バインドマウントで起動${NC}"
+    else
+        # フォールバック: TMPDIR前置（v1.8方式、Bash系ツールは動かない可能性あり）
+        CLAUDE_CMD="TMPDIR=$HOME/tmp claude"
+        echo -e "  ${YELLOW}⚠️ proot未検出: TMPDIR前置フォールバック（pkg install proot推奨）${NC}"
     fi
 }
 
@@ -37,22 +54,22 @@ run_with_retry() {
     CONTINUE_TRIED="false"
     ANALYSIS=""
 
-    # v1.6追加 - TMPDIR設定（Claude Code実行前に必ず確認）
-    ensure_tmpdir
+    # v1.9変更 - proot方式のClaude Codeコマンド構築
+    setup_claude_cmd
 
     # v1.7更新 - allowedTools拡張（ファイル操作系コマンド追加）
     # ※ git操作はPostman(executor.sh)が管理するため含めない（安全設計）
     local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *),Bash(rm *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(sed *)"
 
     # --- Step 1: 初回実行 ---
-    echo "--- 初回実行開始: $(date) ---" >> "$LOG_FILE"
-    TMPDIR=$HOME/tmp claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
+    echo "--- 初回実行開始（${CLAUDE_CMD}）: $(date) ---" >> "$LOG_FILE"
+    $CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- 初回実行成功: $(date) ---" >> "$LOG_FILE"
         # v1.5追加 - 成功時も作業サマリーを取得
-        ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
+        ANALYSIS=$($CLAUDE_CMD -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -74,14 +91,14 @@ Report in English. Be concise." --continue 2>&1)
         sleep 5
 
         echo "--- リトライ ${i}/${MAX_RETRY} 実行開始: $(date) ---" >> "$LOG_FILE"
-        TMPDIR=$HOME/tmp claude -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
+        $CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
         EXIT_CODE=$?
 
         if [ $EXIT_CODE -eq 0 ]; then
             echo "--- リトライ ${i} で成功: $(date) ---" >> "$LOG_FILE"
             echo -e "  ${GREEN}🔄 リトライ${i}回目で成功！${NC}"
             # v1.5追加 - 成功時も作業サマリーを取得
-            ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
+            ANALYSIS=$($CLAUDE_CMD -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -99,14 +116,14 @@ Report in English. Be concise." --continue 2>&1)
     CONTINUE_TRIED="true"
     echo -e "  ${YELLOW}🔄 --continue で継続試行中...${NC}"
     echo "--- --continue 試行開始: $(date) ---" >> "$LOG_FILE"
-    TMPDIR=$HOME/tmp claude --continue >> "$LOG_FILE" 2>&1
+    $CLAUDE_CMD --continue >> "$LOG_FILE" 2>&1
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- --continue 成功: $(date) ---" >> "$LOG_FILE"
         echo -e "  ${GREEN}🔄 --continueで成功！${NC}"
         # v1.5追加 - 成功時も作業サマリーを取得
-        ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "Summarize what you just did:
+        ANALYSIS=$($CLAUDE_CMD -p "Summarize what you just did:
 - What files were created/modified/deleted
 - What was the main task accomplished
 - Any issues encountered during the work
@@ -122,7 +139,7 @@ Report in English. Be concise." --continue 2>&1)
     # --- Step 4: 自己分析（Claude Codeに失敗原因を聞く） ---
     echo -e "  ${YELLOW}🔍 Claude Codeに失敗原因を分析させています...${NC}"
     echo "--- 自己分析開始: $(date) ---" >> "$LOG_FILE"
-    ANALYSIS=$(TMPDIR=$HOME/tmp claude -p "The previous task failed. Analyze the failure:
+    ANALYSIS=$($CLAUDE_CMD -p "The previous task failed. Analyze the failure:
 - What was attempted
 - How far it progressed
 - Root cause of failure
