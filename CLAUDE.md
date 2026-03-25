@@ -1,6 +1,6 @@
 CLAUDE.md — COCOMI Postman プロジェクトルール
 このファイルはClaude Codeが自動で読み込むルールブックです
-最終更新: 2026-03-25 v1.3
+最終更新: 2026-03-25 v1.4
 🏗️ プロジェクト概要
 COCOMI Postman — COCOMIファミリーの全プロジェクト開発を加速するAI開発パイプライン
 
@@ -67,6 +67,31 @@ Termux /tmp権限対策: proot -b $PREFIX/tmp:/tmp でClaude Codeを起動（ret
   prootが未インストールの場合: pkg install proot
   フォールバック: TMPDIR=~/tmp 前置（Bash系ツールは動作しない可能性あり）
   参考: https://github.com/anthropics/claude-code/issues/18342
+
+## 🔐 Claude Code 3層セキュリティ（v1.4追加）
+
+Claude Codeには3つのセキュリティレイヤーがある:
+
+Layer 1（/tmp権限）: Node.jsが/tmpにアクセスする問題 → proot -b で解決済み
+Layer 2（Tool permissions）: Bashツール使用可否 → settings.jsonで全開放済み
+Layer 3（Built-in sandbox）: Bashでのファイルシステム変更はハードコードでブロック → 突破不可、仕様
+
+重要: Layer 3により mkdir/rm/cp 等のBashコマンドはブロックされるが、Write/Editツールは自由に使える。
+コード修正タスクはWrite/Editで完結させること。ファイル作成もWriteで行う。
+
+## 📬 MCP経由パイプライン（v1.4追加）
+
+指示書の受け取りから実行までの流れ:
+1. クロちゃん（claude.ai）がMCP github_push_fileで missions/ に指示書をpush
+2. タブレットのpostman.sh自動モードがgit pullで指示書を検出
+3. retry.sh がproot方式でClaude Codeを起動
+4. Claude Codeが指示書を読んでWrite/Editで実行
+5. 完了後postman.shがgit push → クロちゃんがMCPでレポート確認
+
+指示書のルール:
+- 先頭に <!-- mission: プロジェクトID --> が必須
+- ファイル名: M-{テーマ名}.md
+- Write/Editで完結するタスクを書く（Bash書き込み系は避ける）
 
 ## ファイル命名ルール
 
