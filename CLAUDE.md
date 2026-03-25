@@ -1,6 +1,6 @@
 CLAUDE.md — COCOMI Postman プロジェクトルール
 このファイルはClaude Codeが自動で読み込むルールブックです
-最終更新: 2026-02-23 v1.2
+最終更新: 2026-03-25 v1.3
 🏗️ プロジェクト概要
 COCOMI Postman — COCOMIファミリーの全プロジェクト開発を加速するAI開発パイプライン
 
@@ -21,16 +21,20 @@ _commentフィールドで説明を入れる
 日本語の値はそのまま日本語で
 📂 ファイル構成
 ~/cocomi-postman/
-├── postman.sh          ← タブレット支店（本店）メイン v2.0
-├── post.sh             ← スマホ支店メイン v1.6
+├── postman.sh          ← タブレット支店（本店）メイン v2.5
+├── post.sh             ← スマホ支店メイン v1.7
 ├── config.json         ← 全体設定（※.gitignore除外、GitHubにはpushしない）
 ├── config.example.json ← config.jsonの雛形（これを見てconfig.jsonを作る）
 ├── CLAUDE.md           ← このファイル
 ├── cocomi-repo-setup.sh ← 新リポCI自動セットアップ v1.0
 ├── core/               ← 本店の分割モジュール
-│   ├── executor.sh     ← 実行エンジン v2.0
+│   ├── executor.sh     ← 実行エンジン v2.2
 │   ├── step-runner.sh  ← ステップ実行エンジン v2.0.2
-│   ├── retry.sh        ← リトライ＆自動継続エンジン v1.5
+│   ├── retry.sh        ← リトライ＆自動継続エンジン v1.9（proot /tmp解決）
+│   ├── logger.sh       ← ログ＆履歴 v1.0
+│   ├── project-manager.sh ← プロジェクト管理 v1.0
+│   ├── settings.sh     ← 設定管理 v1.0
+│   ├── config-helper.py ← 設定ヘルパー v1.0
 │   └── notifier.sh     ← LINE通知 v1.4
 ├── missions/           ← 指示書（プロジェクト別フォルダ）
 ├── reports/            ← 完了レポート
@@ -59,7 +63,10 @@ post.sh はスマホで動くので軽量に保つ
 postman.sh は機能が増えたらcore/に分割する
 テンプレートは templates/ 以下で管理
 git操作のエラーハンドリングを必ず入れる
-Termux /tmp権限対策: Claude Code起動前に export TMPDIR=~/tmp && mkdir -p ~/tmp
+Termux /tmp権限対策: proot -b $PREFIX/tmp:/tmp でClaude Codeを起動（retry.sh v1.9で自動化）
+  prootが未インストールの場合: pkg install proot
+  フォールバック: TMPDIR=~/tmp 前置（Bash系ツールは動作しない可能性あり）
+  参考: https://github.com/anthropics/claude-code/issues/18342
 
 ## ファイル命名ルール
 
