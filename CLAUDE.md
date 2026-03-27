@@ -1,6 +1,6 @@
 CLAUDE.md — COCOMI Postman プロジェクトルール
 このファイルはClaude Codeが自動で読み込むルールブックです
-最終更新: 2026-03-25 v1.4
+最終更新: 2026-03-27 v1.5
 🏗️ プロジェクト概要
 COCOMI Postman — COCOMIファミリーの全プロジェクト開発を加速するAI開発パイプライン
 
@@ -28,8 +28,10 @@ _commentフィールドで説明を入れる
 ├── CLAUDE.md           ← このファイル
 ├── cocomi-repo-setup.sh ← 新リポCI自動セットアップ v1.0
 ├── core/               ← 本店の分割モジュール
-│   ├── executor.sh     ← 実行エンジン v2.2
-│   ├── step-runner.sh  ← ステップ実行エンジン v2.0.2
+│   ├── executor.sh     ← 実行エンジン v2.3
+│   ├── step-runner.sh  ← ステップ実行エンジン v3.0
+│   ├── step-pattern.sh ← ステップパターン実行エンジン v1.0（条件分岐＋エスカレーション）
+│   ├── escalation.sh   ← エスカレーション機能 v1.0（Brave Search＋三姉妹会議）
 │   ├── retry.sh        ← リトライ＆自動継続エンジン v1.9（proot /tmp解決）
 │   ├── logger.sh       ← ログ＆履歴 v1.0
 │   ├── project-manager.sh ← プロジェクト管理 v1.0
@@ -39,25 +41,20 @@ _commentフィールドで説明を入れる
 ├── missions/           ← 指示書（プロジェクト別フォルダ）
 ├── reports/            ← 完了レポート
 ├── errors/             ← エラーレポート
-├── capsules/           ← カプセル保管庫（LINE→Worker→GitHub自動保存）
-│   ├── daily/          ← 日次DIFF
-│   ├── master/         ← MASTER（追記方式）
-│   ├── plans/          ← 企画書
-│   └── ideas/          ← アイデア保管（app/business/cocomi/other）
-├── ideas/              ← アイデアメモ（post.sh用、プロジェクト別）
-├── projects/           ← プロジェクト登録簿（JSON）
+├── capsules/           ← カプセル保管庫
+├── ideas/              ← アイデアメモ
+├── projects/           ← プロジェクト登録簿
 ├── project-maps/       ← プロジェクトマップ
 ├── logs/               ← 実行ログ
-├── dev-capsules/       ← 開発カプセル（DIFF_DEV）保管
+├── dev-capsules/       ← 開発カプセル保管
 ├── templates/          ← テンプレート集
 ├── auto-mode/          ← 自動モード設定
-└── test-app/           ← CLAUDE.mdルール動作確認用テストアプリ
+└── test-app/           ← テストアプリ
 📝 config.json について
 config.jsonにはLINEトークンやGitHubパスなど機密情報が含まれる。
 .gitignoreで除外済みなのでGitHubにはpushされない。
 新環境セットアップ時はconfig.example.jsonをコピーして値を埋める:
   cp config.example.json config.json
-  # config.jsonを編集して実際のトークンやパスを入れる
 🔧 開発ルール
 post.sh はスマホで動くので軽量に保つ
 postman.sh は機能が増えたらcore/に分割する
@@ -65,7 +62,6 @@ postman.sh は機能が増えたらcore/に分割する
 git操作のエラーハンドリングを必ず入れる
 Termux /tmp権限対策: proot -b $PREFIX/tmp:/tmp でClaude Codeを起動（retry.sh v1.9で自動化）
   prootが未インストールの場合: pkg install proot
-  フォールバック: TMPDIR=~/tmp 前置（Bash系ツールは動作しない可能性あり）
   参考: https://github.com/anthropics/claude-code/issues/18342
 
 ## 🔐 Claude Code 3層セキュリティ（v1.4追加）
@@ -93,6 +89,53 @@ Layer 3（Built-in sandbox）: Bashでのファイルシステム変更はハー
 - ファイル名: M-{テーマ名}.md
 - Write/Editで完結するタスクを書く（Bash書き込み系は避ける）
 
+## 🔀 ステップパターン指示書（v1.5追加）
+
+アキヤ発案の条件分岐型指示書。「ダメだったら次のパターン」を実現する。
+
+### 記法
+```markdown
+### Step 1/4: まずこのアプローチを試す
+<!-- on-fail: next -->
+<!-- on-success: step-3 -->
+（Claude Codeへの指示）
+
+### Step 2/4: 別のアプローチを試す（フォールバック）
+<!-- on-fail: next -->
+<!-- on-success: step-3 -->
+
+### Step 3/4: Brave Searchで解決策を検索
+<!-- on-fail: next -->
+<!-- type: search -->
+<!-- query: 検索キーワード -->
+
+### Step 4/4: 三姉妹会議に問題を投げる
+<!-- on-fail: stop -->
+<!-- type: meeting -->
+<!-- grade: standard -->
+```
+
+### メタデータタグ一覧
+| タグ | 値 | 説明 |
+|------|-----|------|
+| on-fail | next / stop / step-N | 失敗時の遷移先（デフォルト: stop） |
+| on-success | next / step-N | 成功時の遷移先（デフォルト: next） |
+| type | execute / search / meeting | ステップの種類（デフォルト: execute） |
+| query | 検索文字列 | type: search 時のBrave Search検索クエリ |
+| grade | lite / standard / full | type: meeting 時の会議グレード（デフォルト: standard） |
+
+### 動作の流れ
+- on-fail: タグがある指示書は自動でパターンモードになる
+- on-fail: タグがない従来の指示書はそのまま一本道で実行（後方互換）
+- type: search はcocomi-api-relay経由でBrave Search APIを叩く
+- type: meeting はcocomi-api-relay経由で三姉妹会議を開催する
+- 検索/会議の結果は次のステップに自動注入される
+
+### 実装ファイル
+- core/step-runner.sh v3.0 — has_step_pattern()判定
+- core/step-pattern.sh v1.0 — 条件分岐付き実行ループ
+- core/escalation.sh v1.0 — Brave Search＋三姉妹会議
+
 ## ファイル命名ルール
 
 ### 基本原則
@@ -101,76 +144,12 @@ Layer 3（Built-in sandbox）: Bashでのファイルシステム変更はハー
 
 ### レポートファイル（reports/配下）
 形式: R-{ミッションID}-{プロジェクト名}-{内容要約}.md
-要約は日本語で、何をやったかが15文字以内でわかるように。
-
-良い例:
-- R-CONFIG-UPDATE.md
-- R-LINE-0223-cocomi-postman-config更新とCLAUDE修正.md
-- R-001-genba-pro-ログイン画面の色変更.md
-- R-STEP-001-culo-chan-ドロップダウンバグ修正.md
-
-悪い例（内容がわからない）:
-- R-001-20260220-1121.md
-- R-STEP-001-step-execution.md
 
 ### カプセルファイル（capsules/配下）
-
-#### daily/（日次DIFF）
-形式: {日付}_DIFF{種別}_{内容要約}.md
-種別は「総合」「DEV」のどちらか。
-内容要約にその日の主な作業内容を20文字以内で書く。
-
-良い例:
-- 2026-02-23_DIFF総合_Worker-v1.4開発とフォルダ機能.md
-- 2026-02-23_DIFF-DEV_destタグルーティング実装.md
-- 2026-02-22_DIFF総合_ステップ実行テスト成功.md
-
-悪い例:
-- 2026-02-22_思い出カプセル_DIFF_総合_02.md（「02」だけでは内容不明）
-- 2026-02-22_開発カプセル_DIFF_DEV_postman_02.md
-
-#### master/（MASTERカプセル）
-形式: MASTER_{テーマ}_v{番号}.md
-テーマにはどのシステム・アプリの記録かを書く。
-
-良い例:
-- MASTER_Postmanシステム仕様_v5.md
-- MASTER_CULOchan開発記録_v3.md
-
-悪い例:
-- MASTER_v5.md（何のMASTERかわからない）
-
-#### plans/（企画書）
-形式: 企画書_{テーマ名}.md
-テーマ名で何の企画かわかるように。
-
-良い例:
-- 企画書_COCOMI画像生成_Live2Dパイプライン.md
-- 企画書_LINEリッチメニュー開発ナビ.md
-
-#### ideas/（アイデア）
-形式: {日付}_{カテゴリ}_{アイデア概要}.md
-
-良い例:
-- 2026-02-23_app_写真に手書きメモ重ねる機能.md
-- 2026-02-23_cocomi_LINE音声入力対応.md
+daily/: {日付}_DIFF{種別}_{内容要約}.md
+master/: MASTER_{テーマ}_v{番号}.md
+plans/: 企画書_{テーマ名}.md
+ideas/: {日付}_{カテゴリ}_{アイデア概要}.md
 
 ### ミッション指示書（missions/配下）
-形式: M-{テーマ名}.md  または  M-LINE-{MMDD}-{HHmm}-{内容要約}.md
-テキスト指示から自動生成する場合も、内容要約を必ず含める。
-
-良い例:
-- M-CONFIG-UPDATE.md
-- M-NAMING-RULES.md
-- M-LINE-0223-1500-ログイン画面の色を青に変更.md
-
-悪い例:
-- M-LINE-0223-1500.md（内容がわからない）
-
-### 仕様書・取説（capsules/master/配下）
-形式: {アプリ/システム名}-{文書種別}-{テーマ}.md
-
-良い例:
-- COCOMI-POSTMAN-仕様書-システム全体像.md
-- COCOMI-POSTMAN-仕様書-Worker.md
-- COCOMI-POSTMAN-取扱説明書.md
+形式: M-{テーマ名}.md
