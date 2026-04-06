@@ -39,47 +39,22 @@ setup_claude_cmd() {
     fi
 }
 
-# === v2.0追加 - 作業サマリー取得＋MCPログ保存プロンプト ===
-# 成功時: Claude Codeに作業内容をまとめさせ、MCP save_code_logで保存させる
-_build_success_prompt() {
-    local mission="$1"
-    local project="${2:-unknown}"
-    cat << PROMPT_EOF
-Summarize what you just did:
-- What files were created/modified/deleted
-- What was the main task accomplished
-- Any issues encountered during the work
-- Any warnings or suggestions for next steps
-Report in English. Be concise.
+# === v2.0追加 - MCPログ保存付きサマリー取得 ===
+# Claude Codeに作業サマリーを聞き、MCP save_code_logで保存させる
+# 引数: $1=ステータス(success/error)
+_get_analysis_with_log() {
+    local log_status="$1"
+    local prompt_text=""
 
-Then save this summary using the MCP tool save_code_log with these parameters:
-- mission_name: ${mission}
-- project: ${project}
-- status: success
-- output: (your summary above)
-PROMPT_EOF
-}
+    if [ "$log_status" = "success" ]; then
+        prompt_text="Summarize what you just did: What files were created/modified/deleted. What was the main task accomplished. Any issues encountered during the work. Any warnings or suggestions for next steps. Report in English. Be concise. Then save this summary using the MCP tool save_code_log with mission_name: ${MISSION_NAME}, project: ${CURRENT_PROJECT:-unknown}, status: success, output: your summary above."
+    else
+        prompt_text="The previous task failed. Analyze the failure: What was attempted. How far it progressed. Root cause of failure. Which file and line caused the issue. Suggested fix for the next attempt. Report in English. Be concise and technical. Then save this analysis using the MCP tool save_code_log with mission_name: ${MISSION_NAME}, project: ${CURRENT_PROJECT:-unknown}, status: error, output: your analysis above, analysis: root cause and suggested fix."
+    fi
 
-# === v2.0追加 - 失敗時自己分析＋MCPログ保存プロンプト ===
-_build_failure_prompt() {
-    local mission="$1"
-    local project="${2:-unknown}"
-    cat << PROMPT_EOF
-The previous task failed. Analyze the failure:
-- What was attempted
-- How far it progressed
-- Root cause of failure
-- Which file and line caused the issue
-- Suggested fix for the next attempt
-Report in English. Be concise and technical.
-
-Then save this analysis using the MCP tool save_code_log with these parameters:
-- mission_name: ${mission}
-- project: ${project}
-- status: error
-- output: (your analysis above)
-- analysis: (root cause and suggested fix)
-PROMPT_EOF
+    local result
+    result=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$prompt_text" --continue 2>&1)
+    echo "$result"
 }
 
 # === Claude Code実行（リトライ機構付き） ===
@@ -104,12 +79,6 @@ run_with_retry() {
     # v2.0変更 - MCPツール追加（Claude Codeがsave_code_logで作業結果を自動保存）
     local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *),Bash(rm *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(sed *),mcp__cocomi-memory"
 
-    # v2.0追加 - 成功時プロンプトを事前生成
-    local SUCCESS_PROMPT
-    SUCCESS_PROMPT=$(_build_success_prompt "$MISSION_NAME" "${CURRENT_PROJECT:-unknown}")
-    local FAILURE_PROMPT
-    FAILURE_PROMPT=$(_build_failure_prompt "$MISSION_NAME" "${CURRENT_PROJECT:-unknown}")
-
     # --- Step 1: 初回実行 ---
     echo "--- 初回実行開始（${CLAUDE_CMD}）: $(date) ---" >> "$LOG_FILE"
     $CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" < "$MISSION_FILE" >> "$LOG_FILE" 2>&1
@@ -118,7 +87,7 @@ run_with_retry() {
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- 初回実行成功: $(date) ---" >> "$LOG_FILE"
         # v2.0変更 - 作業サマリー取得＋MCP save_code_logで自動保存
-        ANALYSIS=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$SUCCESS_PROMPT" --continue 2>&1)
+        ANALYSIS=$(_get_analysis_with_log "success")
         if [ -z "$ANALYSIS" ]; then
             ANALYSIS="(No summary available)"
         fi
@@ -143,7 +112,7 @@ run_with_retry() {
             echo "--- リトライ ${i} で成功: $(date) ---" >> "$LOG_FILE"
             echo -e "  ${GREEN}🔄 リトライ${i}回目で成功！${NC}"
             # v2.0変更 - リトライ成功時も作業結果をMCPに自動保存
-            ANALYSIS=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$SUCCESS_PROMPT" --continue 2>&1)
+            ANALYSIS=$(_get_analysis_with_log "success")
             if [ -z "$ANALYSIS" ]; then
                 ANALYSIS="(No summary available)"
             fi
@@ -164,7 +133,7 @@ run_with_retry() {
         echo "--- --continue 成功: $(date) ---" >> "$LOG_FILE"
         echo -e "  ${GREEN}🔄 --continueで成功！${NC}"
         # v2.0変更 - continue成功時も作業結果をMCPに自動保存
-        ANALYSIS=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$SUCCESS_PROMPT" --continue 2>&1)
+        ANALYSIS=$(_get_analysis_with_log "success")
         if [ -z "$ANALYSIS" ]; then
             ANALYSIS="(No summary available)"
         fi
@@ -177,7 +146,7 @@ run_with_retry() {
     echo -e "  ${YELLOW}🔍 Claude Codeに失敗原因を分析させています...${NC}"
     echo "--- 自己分析開始: $(date) ---" >> "$LOG_FILE"
     # v2.0変更 - 失敗時の自己分析もMCPに自動保存
-    ANALYSIS=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$FAILURE_PROMPT" --continue 2>&1)
+    ANALYSIS=$(_get_analysis_with_log "error")
 
     if [ -z "$ANALYSIS" ]; then
         ANALYSIS="（自己分析失敗: Claude Codeからの応答なし）"
