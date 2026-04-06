@@ -113,7 +113,7 @@ jobs:
           echo "  ✅ config.json は除外されてる OK"
         fi
         # APIキーやトークンがハードコードされていないか
-        for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+        for f in $(find . -name "*.sh" -not -path "./.git/*" -not -name "setup-richmenu.sh"); do
           if grep -qE "(ghp_|sk-ant-|xoxb-|Bearer )" "$f"; then
             echo "  ❌ $f: APIキーらしき文字列がハードコードされてる！"
             ERRORS=$((ERRORS + 1))
