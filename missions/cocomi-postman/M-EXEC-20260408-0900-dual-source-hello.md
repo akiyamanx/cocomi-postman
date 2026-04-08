@@ -1,6 +1,11 @@
+<!-- mission: cocomi-postman -->
 # M-EXEC-20260408-0900-dual-source-hello
 
 PLANS: capsules/plans/P-EXEC-20260408-0900-dual-source-hello.md
+
+## プロジェクト: cocomi-postman
+## 送信元: WEBクロちゃん（MCP経由）
+## 日時: 2026-04-08T10:15:00+09:00
 
 ## ミッション概要
 デュアルソース方式の動作確認テスト（plans方式の初回検証）
