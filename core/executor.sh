@@ -12,6 +12,7 @@
 # v2.1 追加 2026-02-25 - 安全バリデーション（missionタグ検証）＆auto_modeメニュー復帰キー
 # v2.2 修正 2026-02-27 - git_push_projectに変更なし戻り値追加（CI待ちスキップ対応）
 # v2.3 追加 2026-03-27 - ステップパターン指示書判定（has_step_pattern→step-pattern.sh連携）
+# v2.4 修正 2026-04-08 - git_push_projectメッセージ明確化（他リポ操作パターン対応）
 # /tmp権限問題の回避: git操作は全てPostman（Termux直接）が行う
 
 # === v2.1追加 - ミッション指示書バリデーション（安全弁） ===
@@ -93,7 +94,7 @@ git_push_project() {
                 fi
             fi
         else
-            echo -e "  ${YELLOW}📝 プロジェクトに変更なし（push不要）${NC}"
+            echo -e "  ${YELLOW}📝 ${CURRENT_PROJECT_NAME}リポへの変更なし（Postmanのpushスキップ）${NC}"
             return 2
         fi
     fi
