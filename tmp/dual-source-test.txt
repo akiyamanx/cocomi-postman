@@ -1,0 +1,5 @@
+Hello from plans方式! 🎉
+実行日時: 2026-04-08 10:15 JST
+これはPostman進化版デュアルソース方式の初回動作確認です。
+クロちゃん（WEB版）が plans/ と missions/ の2ファイルを push し、
+Postmanが missions/ を検出して Claude Code が実行しました。
