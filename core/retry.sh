@@ -8,6 +8,14 @@
 # v1.8 修正 2026-03-25 - claude呼び出し全箇所にTMPDIR前置
 # v1.9 修正 2026-03-25 - proot方式で/tmp問題を根本解決（GitHub issue #18342回避策）
 # v2.0 追加 2026-04-07 - Claude Codeログ自動保存（MCP save_code_log連携）
+# v2.1 修正 2026-05-13 - Phase 0 v1.3対応・三姉妹会議結論反映
+#   - _get_analysis_with_log: printf '%s' + パイプ化（echo -n/-e 解釈差異の罠回避）
+#   - _get_analysis_with_log: $LOG_FILE 引数を追加（変数未定義の事前検出 ${VAR:?}）
+#   - ALLOWED_TOOLS: MCP save_code_log を明示的に追加（粒度上げ）
+#   - 呼び出し側4箇所に $LOG_FILE 引数を追加
+# Version: 2.1.0
+# 変更日: 2026-05-13
+# 変更者: Claude Code (Phase 0 v1.3対応・三姉妹会議結論反映)
 
 # === グローバル変数（executor.shへの受け渡し用） ===
 RETRY_COUNT=0
@@ -40,10 +48,15 @@ setup_claude_cmd() {
 }
 
 # === v2.0追加 - MCPログ保存付きサマリー取得 ===
+# v2.1変更 2026-05-13 - 三姉妹会議 指摘1,2 反映
 # Claude Codeに作業サマリーを聞き、MCP save_code_logで保存させる
-# 引数: $1=ステータス(success/error)
+# 引数: $1=ステータス(success/error), $2=LOG_FILE（呼び出し側のログファイルパス）
 _get_analysis_with_log() {
-    local log_status="$1"
+    # v2.1変更 2026-05-13 - 三姉妹会議 指摘2 反映
+    # 変数未定義を事前検出する。${VAR:?} は未定義時に即時 exit させ、
+    # サイレント失敗（空文字でClaudeに渡される）を防ぐ。
+    local log_status="${1:?_get_analysis_with_log: 第1引数 status(success/error) が未定義です}"
+    local target_log="${2:?_get_analysis_with_log: 第2引数 LOG_FILE が未定義です}"
     local prompt_text=""
 
     if [ "$log_status" = "success" ]; then
@@ -52,9 +65,25 @@ _get_analysis_with_log() {
         prompt_text="The previous task failed. Analyze the failure: What was attempted. How far it progressed. Root cause of failure. Which file and line caused the issue. Suggested fix for the next attempt. Report in English. Be concise and technical. Then save this analysis using the MCP tool save_code_log with mission_name: ${MISSION_NAME}, project: ${CURRENT_PROJECT:-unknown}, status: error, output: your analysis above, analysis: root cause and suggested fix."
     fi
 
+    # v2.1変更 2026-05-13 - 三姉妹会議 指摘1 反映
+    # echo は -n/-e 解釈差異の罠があるため使わず、
+    # 特殊文字を安全に stdin へ渡すため printf '%s' + パイプを使用する。
+    # 本番側の stdin 入力（< "$MISSION_FILE"）と発想を揃える狙いもある。
     local result
-    result=$($CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" "$prompt_text" --continue 2>&1)
-    echo "$result"
+    result=$(printf '%s' "$prompt_text" | $CLAUDE_CMD -p --allowedTools "$ALLOWED_TOOLS" --continue 2>&1)
+
+    # v2.1変更 2026-05-13 - 呼び出し元のログファイルにも応答を残す（target_log を活用）
+    # 失敗時の自己分析ログが取れないとデバッグ困難になるため、ここで保険として書き込む。
+    if [ -n "$target_log" ] && [ -w "$(dirname "$target_log")" ]; then
+        {
+            printf '%s\n' "--- _get_analysis_with_log (${log_status}) 応答開始: $(date) ---"
+            printf '%s\n' "$result"
+            printf '%s\n' "--- _get_analysis_with_log (${log_status}) 応答終了 ---"
+        } >> "$target_log" 2>/dev/null
+    fi
+
+    # v2.1変更 2026-05-13 - 出力も printf に統一（echo -n/-e 解釈差異の罠回避）
+    printf '%s\n' "$result"
 }
 
 # === Claude Code実行（リトライ機構付き） ===
@@ -77,7 +106,11 @@ run_with_retry() {
     setup_claude_cmd
 
     # v2.0変更 - MCPツール追加（Claude Codeがsave_code_logで作業結果を自動保存）
-    local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *),Bash(rm *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(sed *),mcp__cocomi-memory"
+    # v2.1変更 2026-05-13 - 三姉妹会議 指摘1（修正1）反映
+    # ALLOWED_TOOLS は MCP サーバ名（mcp__cocomi-memory）のワイルドカード指定だけだと
+    # 個別ツール（save_code_log）が認識されないケースがあるため、必要なツールを
+    # 明示的に追加して粒度を上げる。既存の権限は温存する（Read/Write/Edit/Bashサブセット）。
+    local ALLOWED_TOOLS="Read,Write,Edit,Bash(cat *),Bash(ls *),Bash(find *),Bash(head *),Bash(tail *),Bash(wc *),Bash(grep *),Bash(node *),Bash(npm *),Bash(rm *),Bash(mkdir *),Bash(cp *),Bash(mv *),Bash(sed *),mcp__cocomi-memory,mcp__cocomi-memory__save_code_log,mcp__cocomi-memory__save_memory,mcp__cocomi-memory__search_memory"
 
     # --- Step 1: 初回実行 ---
     echo "--- 初回実行開始（${CLAUDE_CMD}）: $(date) ---" >> "$LOG_FILE"
@@ -87,7 +120,8 @@ run_with_retry() {
     if [ $EXIT_CODE -eq 0 ]; then
         echo "--- 初回実行成功: $(date) ---" >> "$LOG_FILE"
         # v2.0変更 - 作業サマリー取得＋MCP save_code_logで自動保存
-        ANALYSIS=$(_get_analysis_with_log "success")
+        # v2.1変更 2026-05-13 - 三姉妹会議 指摘2（修正3）反映: 第2引数 $LOG_FILE を必須化
+        ANALYSIS=$(_get_analysis_with_log "success" "$LOG_FILE")
         if [ -z "$ANALYSIS" ]; then
             ANALYSIS="(No summary available)"
         fi
@@ -112,7 +146,8 @@ run_with_retry() {
             echo "--- リトライ ${i} で成功: $(date) ---" >> "$LOG_FILE"
             echo -e "  ${GREEN}🔄 リトライ${i}回目で成功！${NC}"
             # v2.0変更 - リトライ成功時も作業結果をMCPに自動保存
-            ANALYSIS=$(_get_analysis_with_log "success")
+            # v2.1変更 2026-05-13 - 三姉妹会議 指摘2（修正3）反映: 第2引数 $LOG_FILE を必須化
+        ANALYSIS=$(_get_analysis_with_log "success" "$LOG_FILE")
             if [ -z "$ANALYSIS" ]; then
                 ANALYSIS="(No summary available)"
             fi
@@ -133,7 +168,8 @@ run_with_retry() {
         echo "--- --continue 成功: $(date) ---" >> "$LOG_FILE"
         echo -e "  ${GREEN}🔄 --continueで成功！${NC}"
         # v2.0変更 - continue成功時も作業結果をMCPに自動保存
-        ANALYSIS=$(_get_analysis_with_log "success")
+        # v2.1変更 2026-05-13 - 三姉妹会議 指摘2（修正3）反映: 第2引数 $LOG_FILE を必須化
+        ANALYSIS=$(_get_analysis_with_log "success" "$LOG_FILE")
         if [ -z "$ANALYSIS" ]; then
             ANALYSIS="(No summary available)"
         fi
@@ -146,7 +182,8 @@ run_with_retry() {
     echo -e "  ${YELLOW}🔍 Claude Codeに失敗原因を分析させています...${NC}"
     echo "--- 自己分析開始: $(date) ---" >> "$LOG_FILE"
     # v2.0変更 - 失敗時の自己分析もMCPに自動保存
-    ANALYSIS=$(_get_analysis_with_log "error")
+    # v2.1変更 2026-05-13 - 三姉妹会議 指摘2（修正3）反映: 第2引数 $LOG_FILE を必須化
+    ANALYSIS=$(_get_analysis_with_log "error" "$LOG_FILE")
 
     if [ -z "$ANALYSIS" ]; then
         ANALYSIS="（自己分析失敗: Claude Codeからの応答なし）"
